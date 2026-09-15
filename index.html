@@ -289,7 +289,7 @@ const monthKey=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`
 const monthLabel=k=>{const [y,m]=k.split('-');return new Date(+y,+m-1,1).toLocaleString(undefined,{month:'long',year:'numeric'})};
 function store(k,v){try{if(v===undefined)return localStorage.getItem(k);localStorage.setItem(k,v)}catch(e){return null}}
 const CFG=window.QM_CONFIG||{};
-const AUTH={token:store('qm_tok')||'',waiters:[]};
+const AUTH={token:store('qm_tok')||'',waiters:[],hadToken:!!store('qm_tok')};
 function tokenExp(t){try{const p=JSON.parse(atob(t.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));return (p.exp||0)*1000}catch(e){return 0}}
 function tokenEmail(t){try{return JSON.parse(atob(t.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))).email||''}catch(e){return ''}}
 const tokenValid=()=>AUTH.token&&tokenExp(AUTH.token)-Date.now()>60000;
@@ -297,7 +297,7 @@ function showSignin(msg){$('#si-msg').textContent=msg||'';$('#signin').classList
 function hideSignin(){$('#signin').classList.remove('on')}
 function onCredential(resp){
   const first=!S.loaded;
-  AUTH.token=resp.credential;store('qm_tok',AUTH.token);hideSignin();
+  AUTH.token=resp.credential;AUTH.hadToken=true;store('qm_tok',AUTH.token);hideSignin();
   const w=AUTH.waiters.splice(0);w.forEach(f=>f());
   if(first)load().then(()=>{if(!who()&&!store('qm_asked'))nameModal()});
 }
@@ -307,7 +307,7 @@ async function initGsi(){
   if(gsiInit)return true;
   if(!CFG.CLIENT_ID||/^PASTE_/.test(CFG.CLIENT_ID)){showSignin('App is not configured yet (CLIENT_ID in config.js).');return false}
   if(!(await gsiReady())){showSignin('Could not reach Google sign-in. Check your connection.');return false}
-  google.accounts.id.initialize({client_id:CFG.CLIENT_ID,callback:onCredential,auto_select:true,cancel_on_tap_outside:false,itp_support:true,use_fedcm_for_prompt:true});
+  google.accounts.id.initialize({client_id:CFG.CLIENT_ID,callback:onCredential,ux_mode:'popup',auto_select:false});
   google.accounts.id.renderButton($('#gbtn'),{theme:'filled_black',size:'large',shape:'pill',text:'signin_with'});
   gsiInit=true;return true;
 }
@@ -316,8 +316,7 @@ async function ensureToken(){
   if(!(await initGsi()))throw new Error('Sign-in required');
   await new Promise(res=>{
     AUTH.waiters.push(res);
-    showSignin('Your sign-in expired. Sign in to continue.');
-    try{google.accounts.id.prompt()}catch(e){}
+    showSignin(AUTH.hadToken?'Your sign-in expired. Sign in to continue.':'');
   });
 }
 async function call(fn,arg){
@@ -974,7 +973,7 @@ $('#s-tiles').innerHTML='<div class="empty">Loading inventory…</div>';
 function netState(){$('#offline').style.display=navigator.onLine?'none':'block'}
 window.addEventListener('online',()=>{netState();load()});window.addEventListener('offline',netState);netState();
 (async()=>{
-  if(!tokenValid()){showSignin('');if(await initGsi()){try{google.accounts.id.prompt()}catch(e){}}}
+  if(!tokenValid()){showSignin('');await initGsi()}
   else{initGsi()}
   if(tokenValid())load().then(()=>{if(!who()&&!store('qm_asked'))nameModal()});
 })();
