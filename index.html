@@ -328,7 +328,12 @@ async function call(fn,arg){
   if(!res.ok)throw new Error('Server error ('+res.status+')');
   const out=await res.json();
   if(out.ok)return out.data;
-  if(out.code==='auth'){AUTH.token='';store('qm_tok','');await ensureToken();return call(fn,arg)}
+  if(out.code==='auth'){
+    const fresh=AUTH.token&&(tokenExp(AUTH.token)-Date.now()>50*60000);
+    AUTH.token='';store('qm_tok','');
+    if(fresh||arg&&arg.__retried){showSignin('Server rejected sign-in: '+(out.error||'unknown error'));throw new Error(out.error||'Sign-in rejected')}
+    await ensureToken();return call(fn,Object.assign({},arg,{__retried:true}));
+  }
   if(out.code==='denied'){showSignin(out.error);try{google.accounts.id.disableAutoSelect()}catch(e){}AUTH.token='';store('qm_tok','')}
   throw new Error(out.error||'Request failed');
 }
