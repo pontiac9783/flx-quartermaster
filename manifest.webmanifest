@@ -1,0 +1,16 @@
+{
+  "name": "FLX Quartermaster",
+  "short_name": "Quartermaster",
+  "description": "Punishers LEMC Finger Lakes — inventory, sales, tabs and ledger",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#14171a",
+  "theme_color": "#1c2125",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
