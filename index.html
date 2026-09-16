@@ -120,7 +120,10 @@ td.wrap{white-space:normal;min-width:10rem}
 .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,400px),1fr));gap:1rem}
 #ov{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:flex-start;justify-content:center;padding:4vh 1rem;z-index:20;overflow:auto}
 #ov.on{display:flex}
-#md{background:var(--surface);border-radius:12px;padding:1.2rem;width:100%;max-width:520px;border:1px solid var(--line)}
+#md{background:var(--surface);border-radius:12px;padding:1.2rem;width:100%;max-width:520px;border:1px solid var(--line);position:relative}
+#md h3:first-of-type{padding-right:2.4rem}
+.mdx{position:absolute;top:.6rem;right:.6rem;width:36px;height:36px;border-radius:50%;border:1px solid var(--line);background:var(--surface2);color:var(--ink);font-size:1.1rem;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.mdx:hover{background:var(--line)}
 .seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;flex-wrap:wrap}
 .seg button{flex:1;border:0;background:var(--surface);padding:.55rem;min-height:44px;cursor:pointer;border-right:1px solid var(--line)}
 .seg button:last-child{border-right:0}
@@ -471,10 +474,34 @@ const onHand=id=>S.stock[id]||0;
 const heldElsewhere=id=>S.held[id]||0;
 const avail=id=>onHand(id)-heldElsewhere(id);
 
-function openModal(html,bind){$('#md').style.maxWidth='';$('#md').innerHTML=html;$('#ov').classList.add('on');if(bind)bind($('#md'));const f=$('#md').querySelector('input,select');if(f)setTimeout(()=>f.focus(),30)}
-function closeModal(){$('#ov').classList.remove('on');$('#md').innerHTML=''}
-$('#ov').addEventListener('click',e=>{if(e.target.id==='ov')closeModal()});
-document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal()});
+const MD={form:false,dirty:false,downOnOverlay:false};
+function openModal(html,bind){
+  const md=$('#md');
+  md.style.maxWidth='';
+  md.innerHTML='<button type="button" class="mdx" aria-label="Close" title="Close">✕</button>'+html;
+  MD.form=!!md.querySelector('input,select,textarea');
+  MD.dirty=false;
+  $('#ov').classList.add('on');
+  md.querySelector('.mdx').onclick=requestClose;
+  if(bind)bind(md);
+  const f=md.querySelector('input:not([type=file]):not([type=checkbox]),select,textarea');
+  if(f)setTimeout(()=>f.focus(),30);
+}
+function closeModal(){$('#ov').classList.remove('on');$('#md').innerHTML='';MD.dirty=false;MD.form=false}
+function requestClose(){
+  if(!$('#ov').classList.contains('on'))return;
+  if(MD.dirty&&!confirm('Discard your changes?'))return;
+  closeModal();
+}
+$('#md').addEventListener('input',()=>{MD.dirty=true});
+$('#md').addEventListener('change',()=>{MD.dirty=true});
+$('#ov').addEventListener('pointerdown',e=>{MD.downOnOverlay=e.target.id==='ov'});
+$('#ov').addEventListener('click',e=>{
+  const outside=e.target.id==='ov'&&MD.downOnOverlay;
+  MD.downOnOverlay=false;
+  if(outside&&!MD.form)closeModal();
+});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('#ov').classList.contains('on')){e.preventDefault();requestClose()}});
 
 function nameModal(){
   openModal(`<h3>Who's working the table?</h3><p class="muted">Your Google email (${esc(S.email||'unknown')}) is always recorded. Add a display name to make the ledger easier to read.</p>
