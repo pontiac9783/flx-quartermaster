@@ -1,5 +1,5 @@
 // Bump VERSION whenever you upload new app files so devices pick up the update.
-const VERSION = 'qm-v10';
+const VERSION = 'qm-v11';
 const SHELL = ['./', './index.html', './config.js', './manifest.webmanifest',
   './icon-192.png', './icon-512.png', './icon-maskable-512.png', './apple-touch-icon.png', './favicon.png'];
 
