@@ -594,6 +594,7 @@ $('#s-tiles').addEventListener('click',e=>{
   const b=e.target.closest('.tile');if(!b)return;
   const it=S.items.get(b.dataset.id);if(!it)return;
   const l=S.cart.get(it.id),next=(l?l.qty:0)+1,hl=heldElsewhere(it.id);
+  if(!isAdmin()&&next>avail(it.id)){toast(avail(it.id)>0?`Only ${avail(it.id)} in stock`:`${label(it)} is out of stock — ask an admin`);return}
   if(hl>0&&next>avail(it.id)){toast(avail(it.id)>0?`Only ${avail(it.id)} available — ${hl} in another cart`:`${label(it)} is in another cart`);return}
   if(l)l.qty++;else S.cart.set(it.id,{id:it.id,qty:1,price:effPrice(it)});
   renderSell();syncCartSoon();
@@ -602,6 +603,7 @@ $('#c-lines').addEventListener('click',e=>{
   const b=e.target.closest('[data-d]');if(!b)return;
   const id=b.closest('.cline').dataset.id,l=S.cart.get(id);if(!l)return;
   const d=+b.dataset.d,hl=heldElsewhere(id);
+  if(d>0&&!isAdmin()&&l.qty+1>avail(id)){toast(`Only ${Math.max(0,avail(id))} in stock`);return}
   if(d>0&&hl>0&&l.qty+1>avail(id)){toast(`Only ${Math.max(0,avail(id))} available — ${hl} in another cart`);return}
   l.qty+=d;if(l.qty<=0)S.cart.delete(id);
   renderSell();syncCartSoon();
@@ -624,6 +626,7 @@ $('#c-go').onclick=async()=>{
   const conflict=[...S.cart.values()].find(l=>heldElsewhere(l.id)>0&&l.qty>avail(l.id));
   if(conflict){toast(`${label(S.items.get(conflict.id))}: only ${Math.max(0,avail(conflict.id))} available — the rest is in another cart`,5000);return}
   const oversell=[...S.cart.values()].some(l=>l.qty>onHand(l.id));
+  if(oversell&&!isAdmin()){const o=[...S.cart.values()].find(l=>l.qty>onHand(l.id));toast(`${label(S.items.get(o.id))}: only ${Math.max(0,onHand(o.id))} in stock — ask an admin`,5000);return}
   if(oversell&&!confirm('Some items show more sold than on hand. Record the sale anyway? (Stock will go negative until corrected.)'))return;
   const lines=[...S.cart.values()].map(l=>({id:l.id,qty:l.qty,price:l.price}));
   const shipOn=S.ship.on&&!needsMember(S.pay);
