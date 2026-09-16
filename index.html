@@ -114,6 +114,8 @@ table{border-collapse:collapse;width:100%;font-size:.95rem}
 th,td{padding:.55rem .7rem;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle;white-space:nowrap}
 th{font-family:"Barlow Condensed",sans-serif;font-size:1rem;font-weight:600;color:var(--muted);background:var(--surface2);position:sticky;top:0}
 tr.low td{background:color-mix(in srgb,var(--warn) 12%,transparent)}
+@media (max-width:640px){.tb-x{display:none}}
+@media (min-width:641px){.tb-sub{display:none}}
 th.act,td.act{position:sticky;right:0;z-index:1;background:var(--surface);box-shadow:-8px 0 8px -8px rgba(0,0,0,.25);text-align:right}
 th.act{background:var(--surface2);z-index:2}
 tr.low td.act{background:color-mix(in srgb,var(--warn) 12%,var(--surface))}
@@ -245,7 +247,7 @@ body.role-user .admin-only{display:none!important}
       <input id="tb-q" class="grow" type="search" placeholder="Search member…">
       <label class="row" style="margin:0;color:var(--ink)"><input type="checkbox" id="tb-all" style="width:auto;min-height:0"> Show paid-up members</label>
     </div>
-    <div class="tw" style="margin-top:.8rem"><table><thead><tr><th>Member</th><th class="num">Charged</th><th class="num">Paid</th><th class="num">Balance</th><th>Last activity</th><th></th></tr></thead><tbody id="tb-body"></tbody></table></div>
+    <div class="tw" style="margin-top:.8rem"><table><thead><tr><th>Member</th><th class="num">Balance</th><th class="num tb-x">Charged</th><th class="num tb-x">Paid</th><th class="tb-x">Last activity</th><th class="act"></th></tr></thead><tbody id="tb-body"></tbody></table></div>
   </section>
 
   <section id="v-stock">
@@ -318,7 +320,7 @@ body.role-user .admin-only{display:none!important}
       <div class="card admin-only">
         <h3>Users</h3>
         <p class="muted" style="margin-top:0">Admins manage stock, pricing, ledger, reports and settings. Users can sell, view stock and handle tabs.</p>
-        <div class="tw"><table><thead><tr><th>Google email</th><th>Role</th><th></th></tr></thead><tbody id="se-users"></tbody></table></div>
+        <div class="tw"><table><thead><tr><th>Google email</th><th>Role</th><th class="act"></th></tr></thead><tbody id="se-users"></tbody></table></div>
         <div class="row" style="margin-top:.6rem"><input id="se-newuser" class="grow" type="email" placeholder="member@gmail.com" autocomplete="off"><select id="se-newrole" style="width:auto"><option value="user">User</option><option value="admin">Admin</option></select><button class="btn" id="se-adduser">Add</button></div>
         <p class="muted" style="font-size:.85rem">New people must also be added in Google Cloud → Audience → Test users before they can sign in.</p>
       </div>
@@ -781,11 +783,11 @@ function renderTabs(){
     <div class="card stat"><div class="v money">${money(paidMonth)}</div><div class="l">Tab payments this month</div></div>`;
   const q=memberKey($('#tb-q').value),showAll=$('#tb-all').checked;
   const rows=all.filter(t=>(showAll||Math.abs(t.balance)>0.004)&&(!q||t.key.includes(q))).sort((a,b)=>b.balance-a.balance||a.name.localeCompare(b.name));
-  $('#tb-body').innerHTML=rows.length?rows.map(t=>`<tr data-k="${esc(t.key)}"><td><b>${esc(t.name)}</b></td>
-    <td class="num money">${money(t.charged)}</td><td class="num money">${money(t.paid)}</td>
+  $('#tb-body').innerHTML=rows.length?rows.map(t=>`<tr data-k="${esc(t.key)}"><td><b>${esc(t.name)}</b><div class="muted tb-sub" style="font-size:.8rem">Last ${new Date(t.last).toLocaleDateString()}</div></td>
     <td class="num money ${t.balance>0.004?'neg':''}"><b>${t.balance<-0.004?money(-t.balance)+' credit':money(t.balance)}</b></td>
-    <td>${new Date(t.last).toLocaleDateString()}</td>
-    <td><div class="row" style="flex-wrap:nowrap;justify-content:flex-end">${t.balance>0.004?'<button class="btn sm pri" data-pay>Record payment</button>':''}<button class="btn sm" data-hist>History</button></div></td></tr>`).join('')
+    <td class="num money tb-x">${money(t.charged)}</td><td class="num money tb-x">${money(t.paid)}</td>
+    <td class="tb-x">${new Date(t.last).toLocaleDateString()}</td>
+    <td class="act"><div class="row" style="flex-wrap:nowrap;justify-content:flex-end">${t.balance>0.004?'<button class="btn sm pri" data-pay>Pay</button>':''}<button class="btn sm" data-hist>History</button></div></td></tr>`).join('')
     :`<tr><td colspan="6" class="empty">${all.length?'No members match.':'No tab charges yet. Sales paid with '+esc((S.settings.memberPays||[]).join(' / ')||'a member payment method')+' show up here.'}</td></tr>`;
 }
 ['#tb-q','#tb-all'].forEach(s=>$(s).addEventListener('input',renderTabs));
@@ -1136,7 +1138,7 @@ function pastSalesModal(){
     const draw=()=>{
       const k=q.value.trim().toLowerCase();
       const rows=list.filter(g=>!k||(g.items.join(' ')+' '+g.party+' '+g.pay).toLowerCase().includes(k)).slice(0,100);
-      body.innerHTML=rows.length?rows.map(g=>`<tr data-s="${esc(g.sale)}"><td class="wrap"><b>${esc(g.items.join(', '))}</b><div class="muted" style="font-size:.85rem">${new Date(g.ts).toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})} · ${esc(g.pay)}${g.party?' · '+esc(g.party):''}</div></td><td class="num money">${money(g.total)}</td><td><button class="btn sm pri" data-ship>Ship</button></td></tr>`).join('')
+      body.innerHTML=rows.length?rows.map(g=>`<tr data-s="${esc(g.sale)}"><td class="wrap"><b>${esc(g.items.join(', '))}</b><div class="muted" style="font-size:.85rem">${new Date(g.ts).toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})} · ${esc(g.pay)}${g.party?' · '+esc(g.party):''}</div></td><td class="num money">${money(g.total)}</td><td class="act"><button class="btn sm pri" data-ship>Ship</button></td></tr>`).join('')
         :'<tr><td class="empty">No matching sales.</td></tr>';
     };
     q.addEventListener('input',draw);draw();
@@ -1245,7 +1247,7 @@ function renderUsers(){
   const rows=[{email:S.owner,role:'admin',owner:true},...S.users.filter(u=>u.email!==S.owner)];
   $('#se-users').innerHTML=rows.filter(u=>u.email).map(u=>`<tr class="userrow" data-e="${esc(u.email)}"><td>${esc(u.email)}${u.email===me?' <span class="muted">(you)</span>':''}</td>
     <td>${u.owner?'<b>Owner</b>':`<select data-role><option value="user" ${u.role!=='admin'?'selected':''}>User</option><option value="admin" ${u.role==='admin'?'selected':''}>Admin</option></select>`}</td>
-    <td>${u.owner?'':'<button class="btn sm" data-rm>Remove</button>'}</td></tr>`).join('');
+    <td class="act">${u.owner?'':'<button class="btn sm" data-rm>Remove</button>'}</td></tr>`).join('');
 }
 function saveUsers(list,msg){return write('saveUsers',{users:list},msg)}
 $('#se-users').addEventListener('change',e=>{
