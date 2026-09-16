@@ -80,6 +80,8 @@ label{display:block;font-size:.9rem;color:var(--muted);margin:.6rem 0 .2rem}
 .salebadge{display:inline-block;background:var(--accent);color:var(--accent-ink);font-size:.72rem;font-weight:700;letter-spacing:.04em;padding:.05rem .4rem;border-radius:4px;vertical-align:middle}
 .tile .salebadge{position:absolute;top:.9rem;left:.9rem;z-index:1}
 .tile .qty{z-index:1}
+.tile.held{opacity:.55}
+.cartnote{font-size:.8rem;color:var(--muted);margin:.4rem 0 0}
 .thumb{display:block;width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:6px;background:var(--surface2);margin-bottom:.35rem}
 .thumb.ph{display:flex;align-items:center;justify-content:center;font-family:"Barlow Condensed",sans-serif;font-size:1.6rem;font-weight:700;color:var(--muted)}
 .thumb.mini{width:44px;height:44px;aspect-ratio:auto;margin:0;border-radius:6px;flex:0 0 auto;font-size:1rem}
@@ -309,6 +311,7 @@ const monthKey=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`
 const monthLabel=k=>{const [y,m]=k.split('-');return new Date(+y,+m-1,1).toLocaleString(undefined,{month:'long',year:'numeric'})};
 function store(k,v){try{if(v===undefined)return localStorage.getItem(k);localStorage.setItem(k,v)}catch(e){return null}}
 const CFG=window.QM_CONFIG||{};
+const SESSION=(()=>{let s=store('qm_dev');if(!s||!/^[a-z0-9]{8,40}$/.test(s)){s=(Math.random().toString(36).slice(2)+Date.now().toString(36)).replace(/[^a-z0-9]/g,'').slice(0,24);store('qm_dev',s)}return s})();
 const AUTH={token:store('qm_tok')||'',waiters:[],hadToken:!!store('qm_tok')};
 function tokenExp(t){try{const p=JSON.parse(atob(t.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));return (p.exp||0)*1000}catch(e){return 0}}
 function tokenEmail(t){try{return JSON.parse(atob(t.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))).email||''}catch(e){return ''}}
@@ -344,7 +347,7 @@ async function call(fn,arg){
   if(!CFG.API_URL||/^PASTE_/.test(CFG.API_URL))throw new Error('App is not configured yet (API_URL in config.js).');
   if(!navigator.onLine)throw new Error('You are offline');
   await ensureToken();
-  const res=await fetch(CFG.API_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({fn,arg:arg||{},idToken:AUTH.token}),redirect:'follow'});
+  const res=await fetch(CFG.API_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({fn,arg:arg||{},idToken:AUTH.token,session:SESSION}),redirect:'follow'});
   if(!res.ok)throw new Error('Server error ('+res.status+')');
   const out=await res.json();
   if(out.ok)return out.data;
@@ -361,7 +364,7 @@ async function call(fn,arg){
 const S={
   items:new Map(),entries:[],stock:{},voided:new Set(),email:'',url:'#',
   settings:{club:'Quartermaster',cats:[],pays:[]},
-  images:new Map(),users:[],role:'',owner:'',imgPending:new Set(),cart:new Map(),pay:null,cat:'',view:'sell',busy:false,loaded:false
+  images:new Map(),held:{},users:[],role:'',owner:'',imgPending:new Set(),cart:new Map(),pay:null,cat:'',view:'sell',busy:false,loaded:false
 };
 const TYPES={sale:'Sale',payment:'Tab payment',receive:'Received',adjust:'Count adj.',loss:'Loss / damage',comp:'Comp / give-away',void:'Void'};
 
@@ -418,7 +421,7 @@ function apply(d){
   S.voided=new Set(S.entries.filter(e=>e.voided).map(e=>e.id));
   const st={};
   for(const e of S.entries){if(e.type==='void'||e.voided)continue;st[e.itemId]=(st[e.itemId]||0)+num(e.qty)}
-  S.stock=st;S.settings=d.settings;S.loaded=true;S.email=d.email||'';S.url=d.url||'#';S.role=d.role||'user';S.users=d.users||[];S.owner=d.owner||'';applyRole();
+  S.stock=st;S.settings=d.settings;S.loaded=true;S.email=d.email||'';S.url=d.url||'#';S.held=d.held||{};S.role=d.role||'user';S.users=d.users||[];S.owner=d.owner||'';applyRole();
   $('#lg-open').href=S.url;$('#rp-open').href=S.url;
   banner('');showWho();refresh();ensureImages();
 }
@@ -465,6 +468,8 @@ async function write(fn,arg,okMsg){
 }
 const live=()=>S.entries.filter(e=>e.type!=='void'&&!S.voided.has(e.id));
 const onHand=id=>S.stock[id]||0;
+const heldElsewhere=id=>S.held[id]||0;
+const avail=id=>onHand(id)-heldElsewhere(id);
 
 function openModal(html,bind){$('#md').style.maxWidth='';$('#md').innerHTML=html;$('#ov').classList.add('on');if(bind)bind($('#md'));const f=$('#md').querySelector('input,select');if(f)setTimeout(()=>f.focus(),30)}
 function closeModal(){$('#ov').classList.remove('on');$('#md').innerHTML=''}
@@ -502,10 +507,10 @@ function renderSell(){
   const list=oos?base:base.filter(i=>onHand(i.id)>0||S.cart.has(i.id));
   const hidden=base.length-list.length;
   $('#s-tiles').innerHTML=list.length?list.map(i=>{
-    const oh=onHand(i.id);
-    const cls=oh<=0?'out':(oh<=num(i.reorder)?'low':'');
-    const sale=isOnSale(i);
-    return `<button class="tile ${S.cart.has(i.id)?'incart':''} ${sale?'onsale':''}" data-id="${esc(i.id)}" title="${esc(i.description||'')}">${sale?'<span class="salebadge">SALE</span>':''}<span class="qty ${cls}">${oh} left</span>${thumb(i)}<b>${esc(i.name)}</b><span class="sz">${esc(i.size||i.cat||'')}</span><span class="pr money">${money(effPrice(i))}${sale?`<span class="was">${money(num(i.price))}</span>`:''}</span></button>`;
+    const oh=onHand(i.id),hl=heldElsewhere(i.id),av=oh-hl;
+    const cls=av<=0?'out':(av<=num(i.reorder)?'low':'');
+    const sale=isOnSale(i),blocked=hl>0&&av<=0&&!S.cart.has(i.id);
+    return `<button class="tile ${S.cart.has(i.id)?'incart':''} ${sale?'onsale':''} ${blocked?'held':''}" data-id="${esc(i.id)}" title="${esc(i.description||'')}">${sale?'<span class="salebadge">SALE</span>':''}<span class="qty ${cls}">${blocked?'In another cart':`${Math.max(av,oh>0?0:oh)} left`}</span>${thumb(i)}<b>${esc(i.name)}</b><span class="sz">${esc(i.size||i.cat||'')}${hl>0?` <span class="muted">· ${hl} in other cart${hl===1?'':'s'}</span>`:''}</span><span class="pr money">${money(effPrice(i))}${sale?`<span class="was">${money(num(i.price))}</span>`:''}</span></button>`;
   }).join('')+(hidden?`<div class="empty" style="grid-column:1/-1;padding:.8rem">${hidden} out-of-stock item${hidden===1?'':'s'} hidden</div>`:'')
   :`<div class="empty">${!S.items.size?'No items yet — add some on the Stock tab.':hidden?`Nothing in stock here. ${hidden} out-of-stock item${hidden===1?' is':'s are'} hidden — tick “Show out of stock”.`:'No items match.'}</div>`;
   renderCart();
@@ -517,13 +522,13 @@ function renderCart(){
   let total=0,units=0;
   const lines=[...S.cart.values()].map(l=>{
     const it=S.items.get(l.id);total+=l.qty*l.price;units+=l.qty;
-    const over=l.qty>onHand(l.id);
+    const over=l.qty>avail(l.id);
     const pt=l.price!==effPrice(it)?'<span class="tag">price changed</span>':isOnSale(it)?'<span class="salebadge">SALE</span>':'';
-    return `<div class="cline" data-id="${esc(l.id)}"><div><b>${esc(label(it))}</b> ${pt}${it&&it.description?`<div class="desc">${esc(it.description)}</div>`:''}${over?`<div class="neg" style="font-size:.85rem">Only ${onHand(l.id)} on hand</div>`:''}
+    return `<div class="cline" data-id="${esc(l.id)}"><div><b>${esc(label(it))}</b> ${pt}${it&&it.description?`<div class="desc">${esc(it.description)}</div>`:''}${over?`<div class="neg" style="font-size:.85rem">Only ${Math.max(0,avail(l.id))} available${heldElsewhere(l.id)?` · ${heldElsewhere(l.id)} in another cart`:''}</div>`:''}
       <div class="row" style="margin-top:.3rem"><span class="muted">each $</span><input type="number" step="0.01" min="0" value="${l.price}" data-price></div></div>
       <div style="text-align:right"><div class="stepper"><button data-d="-1">−</button><span>${l.qty}</span><button data-d="1">+</button></div><div class="money" style="margin-top:.3rem">${money(l.qty*l.price)}</div></div></div>`;
   }).join('');
-  $('#c-lines').innerHTML=lines||'<p class="muted">Tap items to add them.</p>';
+  $('#c-lines').innerHTML=lines?lines+'<p class="cartnote">Items are held for you while this cart is open.</p>':'<p class="muted">Tap items to add them.</p>';
   $('#c-total').textContent=money(total);
   const req=needsMember(S.pay),partyOk=!req||$('#c-party').value.trim()!=='';
   $('#c-party-lbl').textContent=req?`Member name (required for ${S.pay})`:'Sold to (optional)';
@@ -541,15 +546,18 @@ $('#s-cats').addEventListener('click',e=>{const b=e.target.closest('[data-c]');i
 $('#s-tiles').addEventListener('click',e=>{
   const b=e.target.closest('.tile');if(!b)return;
   const it=S.items.get(b.dataset.id);if(!it)return;
-  const l=S.cart.get(it.id);
+  const l=S.cart.get(it.id),next=(l?l.qty:0)+1,hl=heldElsewhere(it.id);
+  if(hl>0&&next>avail(it.id)){toast(avail(it.id)>0?`Only ${avail(it.id)} available — ${hl} in another cart`:`${label(it)} is in another cart`);return}
   if(l)l.qty++;else S.cart.set(it.id,{id:it.id,qty:1,price:effPrice(it)});
-  renderSell();
+  renderSell();syncCartSoon();
 });
 $('#c-lines').addEventListener('click',e=>{
   const b=e.target.closest('[data-d]');if(!b)return;
   const id=b.closest('.cline').dataset.id,l=S.cart.get(id);if(!l)return;
-  l.qty+=+b.dataset.d;if(l.qty<=0)S.cart.delete(id);
-  renderSell();
+  const d=+b.dataset.d,hl=heldElsewhere(id);
+  if(d>0&&hl>0&&l.qty+1>avail(id)){toast(`Only ${Math.max(0,avail(id))} available — ${hl} in another cart`);return}
+  l.qty+=d;if(l.qty<=0)S.cart.delete(id);
+  renderSell();syncCartSoon();
 });
 $('#c-lines').addEventListener('change',e=>{
   if(!e.target.matches('[data-price]'))return;
@@ -558,16 +566,20 @@ $('#c-lines').addEventListener('change',e=>{
 });
 $('#c-pay').addEventListener('click',e=>{const b=e.target.closest('[data-p]');if(!b)return;S.pay=b.dataset.p;renderCart();if(needsMember(S.pay)&&!$('#c-party').value.trim())$('#c-party').focus()});
 $('#c-party').addEventListener('input',renderCart);
-$('#c-clear').onclick=()=>{S.cart.clear();$('#c-party').value='';$('#c-note').value='';renderSell()};
+$('#c-clear').onclick=()=>{S.cart.clear();$('#c-party').value='';$('#c-note').value='';renderSell();syncCartSoon()};
 $('#cb-go').onclick=()=>$('#cart').scrollIntoView({behavior:'smooth'});
 $('#c-go').onclick=async()=>{
   if(!S.cart.size)return;
   if(needsMember(S.pay)&&!$('#c-party').value.trim()){toast(`${S.pay} requires a member name`);$('#c-party').focus();return}
-  if([...S.cart.values()].some(l=>l.qty>onHand(l.id))&&!confirm('Some items show more sold than on hand. Record the sale anyway? (Stock will go negative until corrected.)'))return;
+  const conflict=[...S.cart.values()].find(l=>heldElsewhere(l.id)>0&&l.qty>avail(l.id));
+  if(conflict){toast(`${label(S.items.get(conflict.id))}: only ${Math.max(0,avail(conflict.id))} available — the rest is in another cart`,5000);return}
+  const oversell=[...S.cart.values()].some(l=>l.qty>onHand(l.id));
+  if(oversell&&!confirm('Some items show more sold than on hand. Record the sale anyway? (Stock will go negative until corrected.)'))return;
   const lines=[...S.cart.values()].map(l=>({id:l.id,qty:l.qty,price:l.price}));
   const tot=lines.reduce((s,l)=>s+l.qty*l.price,0),pay=S.pay;
   const btn=$('#c-go');btn.textContent='Saving…';btn.disabled=true;
-  const ok=await write('recordSale',{lines,pay,party:$('#c-party').value,note:$('#c-note').value},`Sale recorded · ${money(tot)} ${pay}`);
+  clearTimeout(syncT);
+  const ok=await write('recordSale',{lines,pay,party:$('#c-party').value,note:$('#c-note').value,allowNegative:oversell},`Sale recorded · ${money(tot)} ${pay}`);
   btn.textContent='Complete sale';
   if(ok){S.cart.clear();$('#c-party').value='';$('#c-note').value=''}
   renderSell();
@@ -643,6 +655,34 @@ function histModal(t){
 }
 
 
+let syncT=0,syncing=false,syncAgain=false;
+const cartLines=()=>[...S.cart.values()].map(l=>({id:l.id,qty:l.qty}));
+function syncCartSoon(){clearTimeout(syncT);syncT=setTimeout(syncCart,400)}
+async function syncCart(){
+  if(!tokenValid()||!navigator.onLine)return;
+  if(syncing){syncAgain=true;return}
+  syncing=true;
+  try{
+    const res=await call('syncCart',{lines:cartLines()});
+    S.held=res.held||{};
+    const msgs=[];
+    for(const x of res.rejected||[]){
+      const l=S.cart.get(x.id);if(!l)continue;
+      const it=S.items.get(x.id);
+      if(x.granted>0)l.qty=Math.min(l.qty,x.granted);else S.cart.delete(x.id);
+      msgs.push(x.gone?`${label(it)} was removed`:x.granted>0?`${label(it)}: only ${x.available} available — ${x.held} in another cart`:`${label(it)} is in another cart — removed`);
+    }
+    if(msgs.length)toast(msgs.join(' · '),6000);
+    if(S.view==='sell')renderSell();
+  }catch(e){}
+  finally{syncing=false;if(syncAgain){syncAgain=false;syncCartSoon()}}
+}
+setInterval(()=>{if(S.cart.size&&!document.hidden)syncCart()},60000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&S.cart.size)syncCart()});
+window.addEventListener('pagehide',()=>{
+  if(!S.cart.size||!tokenValid()||!navigator.sendBeacon||!CFG.API_URL)return;
+  try{navigator.sendBeacon(CFG.API_URL,new Blob([JSON.stringify({fn:'syncCart',arg:{lines:[]},idToken:AUTH.token,session:SESSION})],{type:'text/plain;charset=utf-8'}))}catch(e){}
+});
 function renderStock(){
   const sel=$('#st-cat'),cur=sel.value;
   const orph=orphanCats();
@@ -667,7 +707,7 @@ function renderStock(){
   $('#st-body').innerHTML=rows.length?rows.map(i=>{
     const oh=onHand(i.id),isLow=i.active!==false&&oh<=num(i.reorder);
     return `<tr class="${isLow?'low':''}" data-id="${esc(i.id)}"><td><div class="itemcell">${thumb(i,'mini')}<div><b>${esc(i.name)}</b>${i.sku?` <span class="muted">· ${esc(i.sku)}</span>`:''}${i.active===false?' <span class="tag">archived</span>':''}${i.description?`<div class="desc">${esc(i.description)}</div>`:''}</div></div></td>
-    <td>${esc(i.cat)}</td><td>${esc(i.size)}</td><td class="num ${oh<0?'neg':''}"><b>${oh}</b></td><td class="num">${num(i.reorder)}</td>
+    <td>${esc(i.cat)}</td><td>${esc(i.size)}</td><td class="num ${oh<0?'neg':''}"><b>${oh}</b>${heldElsewhere(i.id)?`<div class="muted" style="font-size:.8rem">${heldElsewhere(i.id)} in carts</div>`:''}</td><td class="num">${num(i.reorder)}</td>
     <td class="num money">${priceHtml(i)}${isOnSale(i)&&num(i.salePrice)<num(i.cost)?'<div class="neg" style="font-size:.8rem">below cost</div>':''}</td><td class="num money">${money(num(i.cost))}</td><td class="num money">${money(Math.max(0,oh)*num(i.cost))}</td>
     <td class="admin-only"><div class="row" style="flex-wrap:nowrap"><button class="btn sm" data-a="receive">Receive</button><button class="btn sm" data-a="move">Count / write-off</button><button class="btn sm" data-a="edit">Edit</button></div></td></tr>`;
   }).join(''):`<tr><td colspan="9" class="empty">${S.items.size?'No items match.':'No items yet. Tap “Add item” to start.'}</td></tr>`;
@@ -1012,7 +1052,7 @@ function deleteCatModal(name,n){
     };
   });
 }
-$('#se-signout').onclick=()=>{try{google.accounts.id.disableAutoSelect()}catch(e){}AUTH.token='';store('qm_tok','');S.loaded=false;showSignin('Signed out.')};
+$('#se-signout').onclick=async()=>{try{google.accounts.id.disableAutoSelect()}catch(e){}if(S.cart.size){S.cart.clear();await syncCart()}AUTH.token='';store('qm_tok','');S.loaded=false;showSignin('Signed out.')};
 $('#se-save-me').onclick=()=>{store('qm_who',$('#se-who').value.trim());store('qm_theme',$('#se-theme').value);applyTheme();showWho();toast('Saved on this device')};
 
 function refresh(){
