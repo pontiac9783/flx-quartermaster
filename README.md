@@ -12,6 +12,7 @@ Installable web app (PWA) for Android, iPhone/iPad and PC. Free to run.
 | Area | What it does |
 |---|---|
 | **Sell** | Tap-to-sell tiles with pictures, cart, per-line price override, payment method, buyer name. Out-of-stock items hidden by default. |
+| **Shipping** | Optional per-item shipping rate. **Add shipping** in the cart (or **Add shipping to a past sale** / Ledger → **Ship** afterwards) suggests an editable amount and ship-to. Not allowed on Club Account (tab) sales. Recorded as a separate `shipping` ledger line with the same Sale ID, kept out of revenue/profit, included in takings. One shipping line per sale (void to change). |
 | **Cart holds** | Items in a cart are held for that device so two people can't sell the same last unit. Holds renew while the app is open and expire 10 minutes after it's closed; completing or clearing the sale releases them. |
 | **Tabs** | Club Account (member tab) charges, balances, partial/full payments, per-member history. |
 | **Stock** | Items with category, size/variant, auto SKU, price, cost, reorder level, picture, description. Receive, physical count, loss/damage, comp. |
@@ -146,9 +147,9 @@ Send them the app link and install steps. To remove access, remove them in **Set
 
 **Items**
 
-| A | B | C | D | E | F | G | H | I | J | K | L | M | N | O | P |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| ItemID | Name | Category | Size | SKU | Price | UnitCost | ReorderAt | Active | Created | OnHand* | StockValue* | SalePrice | OnSale | Description | ImageID |
+| A | B | C | D | E | F | G | H | I | J | K | L | M | N | O | P | Q |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| ItemID | Name | Category | Size | SKU | Price | UnitCost | ReorderAt | Active | Created | OnHand* | StockValue* | SalePrice | OnSale | Description | ImageID | ShipPrice |
 
 \* Formula columns — do not edit.
 
@@ -162,7 +163,7 @@ Send them the app link and install steps. To remove access, remove them in **Set
 |---|---|---|---|---|---|---|---|---|---|
 | UnitCost | Payment | RecordedBy | Party | Note | VoidsEntry | Voided | ListPrice | PriceType | OnTab |
 
-Types: `sale`, `receive`, `adjust`, `loss`, `comp`, `payment` (tab payment), `void`.
+Types: `sale`, `shipping`, `receive`, `adjust`, `loss`, `comp`, `payment` (tab payment), `void`.
 Stock on hand = sum of `Qty` for non-voided entries.
 
 **Settings**
