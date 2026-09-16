@@ -112,6 +112,7 @@ td.wrap{white-space:normal;min-width:10rem}
 .tag{display:inline-block;padding:.05rem .5rem;border-radius:4px;font-size:.8rem;background:var(--surface2)}
 .t-sale{background:color-mix(in srgb,var(--brass) 25%,transparent)}
 .t-payment{background:color-mix(in srgb,var(--ok) 22%,transparent)}
+.t-shipping{background:color-mix(in srgb,var(--brass) 18%,transparent)}
 .t-receive{background:color-mix(in srgb,var(--ok) 22%,transparent)}
 .t-loss,.t-void{background:color-mix(in srgb,var(--bad) 22%,transparent)}
 .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:.6rem;margin-bottom:1rem}
@@ -190,6 +191,14 @@ body.role-user .admin-only{display:none!important}
       <div class="card cart" id="cart">
         <h3>Current sale</h3>
         <div id="c-lines"></div>
+        <div id="c-ship" style="display:none">
+          <label class="row" style="color:var(--ink);margin:.7rem 0 0"><input type="checkbox" id="c-ship-on" style="width:auto;min-height:0"> Add shipping</label>
+          <div id="c-ship-body" style="display:none">
+            <label for="c-ship-amt">Shipping ($)</label><input id="c-ship-amt" type="number" step="0.01" min="0" inputmode="decimal">
+            <div id="c-ship-hint" class="muted" style="font-size:.85rem;margin-top:.2rem"></div>
+            <label for="c-ship-to">Ship to (optional)</label><input id="c-ship-to" placeholder="Name, address">
+          </div>
+        </div>
         <label>Payment</label>
         <div class="seg" id="c-pay"></div>
         <label for="c-party" id="c-party-lbl">Sold to (optional)</label>
@@ -199,6 +208,7 @@ body.role-user .admin-only{display:none!important}
         <input id="c-note" placeholder="e.g. rally booth, member discount">
         <div class="total"><span>Total</span><span id="c-total" class="money">$0.00</span></div>
         <div class="row"><button class="btn pri grow" id="c-go" disabled>Complete sale</button><button class="btn" id="c-clear">Clear</button></div>
+        <div style="margin-top:.6rem;text-align:center"><button class="btn link" id="c-pastship">Add shipping to a past sale</button></div>
       </div>
     </div>
     <div class="pad-bottom"></div>
@@ -241,7 +251,7 @@ body.role-user .admin-only{display:none!important}
       <select id="lg-month" style="width:auto"></select>
       <select id="lg-type" style="width:auto">
         <option value="">All types</option><option value="sale">Sales</option><option value="receive">Received</option>
-        <option value="adjust">Count adjustments</option><option value="loss">Loss / damage</option><option value="comp">Comp / give-away</option><option value="payment">Tab payments</option><option value="void">Voids</option>
+        <option value="adjust">Count adjustments</option><option value="loss">Loss / damage</option><option value="comp">Comp / give-away</option><option value="shipping">Shipping</option><option value="payment">Tab payments</option><option value="void">Voids</option>
       </select>
       <input id="lg-q" class="grow" type="search" placeholder="Search item, person, note…">
     </div>
@@ -256,7 +266,7 @@ body.role-user .admin-only{display:none!important}
     </div>
     <div class="stats" id="rp-stats" style="margin-top:1rem"></div>
     <div class="grid2">
-      <div class="card"><h3>Takings by payment method</h3><div class="tw"><table><thead><tr><th>Method</th><th class="num">Sales</th><th class="num">Amount</th><th class="num">Tab payments in</th></tr></thead><tbody id="rp-pay"></tbody></table></div></div>
+      <div class="card"><h3>Takings by payment method</h3><div class="tw"><table><thead><tr><th>Method</th><th class="num">Sales</th><th class="num">Amount</th><th class="num">Shipping</th><th class="num">Tab payments in</th></tr></thead><tbody id="rp-pay"></tbody></table></div></div>
       <div class="card"><h3>Top sellers</h3><div class="tw"><table><thead><tr><th>Item</th><th class="num">Units</th><th class="num">Revenue</th><th class="num">Profit</th></tr></thead><tbody id="rp-top"></tbody></table></div></div>
       <div class="card"><h3>Needs reordering</h3><div class="tw"><table><thead><tr><th>Item</th><th class="num">On hand</th><th class="num">Reorder at</th></tr></thead><tbody id="rp-low"></tbody></table></div></div>
       <div class="card"><h3>Sales by price type</h3><div class="tw"><table><thead><tr><th>Price</th><th class="num">Units</th><th class="num">Revenue</th><th class="num">Discount given</th></tr></thead><tbody id="rp-ptype"></tbody></table></div></div>
@@ -367,9 +377,9 @@ async function call(fn,arg){
 const S={
   items:new Map(),entries:[],stock:{},voided:new Set(),email:'',url:'#',
   settings:{club:'Quartermaster',cats:[],pays:[]},
-  images:new Map(),held:{},users:[],role:'',owner:'',imgPending:new Set(),cart:new Map(),pay:null,cat:'',view:'sell',busy:false,loaded:false
+  images:new Map(),held:{},ship:{on:false,manual:false},users:[],role:'',owner:'',imgPending:new Set(),cart:new Map(),pay:null,cat:'',view:'sell',busy:false,loaded:false
 };
-const TYPES={sale:'Sale',payment:'Tab payment',receive:'Received',adjust:'Count adj.',loss:'Loss / damage',comp:'Comp / give-away',void:'Void'};
+const TYPES={sale:'Sale',shipping:'Shipping',payment:'Tab payment',receive:'Received',adjust:'Count adj.',loss:'Loss / damage',comp:'Comp / give-away',void:'Void'};
 
 function toast(msg,ms){const t=$('#toast');t.textContent=msg;t.style.display='block';clearTimeout(toast._t);toast._t=setTimeout(()=>t.style.display='none',ms||2600)}
 function banner(msg){const b=$('#banner');if(!msg){b.style.display='none';return}b.textContent=msg;b.style.display='block'}
@@ -382,7 +392,7 @@ function itemCmp(a,b){
 }
 const needsMember=p=>(S.settings.memberPays||[]).some(m=>catKey(m)===catKey(p));
 const memberKey=n=>String(n||'').trim().replace(/\s+/g,' ').toLowerCase();
-const isCharge=e=>e.type==='sale'&&(e.onTab||needsMember(e.pay));
+const isCharge=e=>(e.type==='sale'||e.type==='shipping')&&(e.onTab||needsMember(e.pay));
 function tabs(){
   const m=new Map();
   const asc=S.entries.slice().reverse();
@@ -493,8 +503,8 @@ function requestClose(){
   if(MD.dirty&&!confirm('Discard your changes?'))return;
   closeModal();
 }
-$('#md').addEventListener('input',()=>{MD.dirty=true});
-$('#md').addEventListener('change',()=>{MD.dirty=true});
+$('#md').addEventListener('input',e=>{if(!e.target.closest('[data-nodirty]'))MD.dirty=true});
+$('#md').addEventListener('change',e=>{if(!e.target.closest('[data-nodirty]'))MD.dirty=true});
 $('#ov').addEventListener('pointerdown',e=>{MD.downOnOverlay=e.target.id==='ov'});
 $('#ov').addEventListener('click',e=>{
   const outside=e.target.id==='ov'&&MD.downOnOverlay;
@@ -556,6 +566,16 @@ function renderCart(){
       <div style="text-align:right"><div class="stepper"><button data-d="-1">−</button><span>${l.qty}</span><button data-d="1">+</button></div><div class="money" style="margin-top:.3rem">${money(l.qty*l.price)}</div></div></div>`;
   }).join('');
   $('#c-lines').innerHTML=lines?lines+'<p class="cartnote">Items are held for you while this cart is open.</p>':'<p class="muted">Tap items to add them.</p>';
+  const sug=r2([...S.cart.values()].reduce((s,l)=>s+l.qty*num((S.items.get(l.id)||{}).shipPrice),0));
+  const shipAllowed=!needsMember(S.pay),shipOn=S.ship.on&&shipAllowed;
+  $('#c-ship').style.display=S.cart.size&&shipAllowed?'':'none';
+  $('#c-ship-on').checked=S.ship.on;
+  $('#c-ship-body').style.display=shipOn?'':'none';
+  if(shipOn&&!S.ship.manual&&document.activeElement!==$('#c-ship-amt'))$('#c-ship-amt').value=sug>0?sug.toFixed(2):'';
+  const shipAmt=shipOn?r2(num($('#c-ship-amt').value)):0;
+  $('#c-ship-hint').innerHTML=!shipOn?'':sug>0?(S.ship.manual&&shipAmt!==sug?`Suggested ${money(sug)} from item rates · <a href="#" id="c-ship-reset">use it</a>`:`Based on item shipping rates. Edit if actual shipping differs.`):'No shipping rate set on these items — enter the amount.';
+  const rs=$('#c-ship-reset');if(rs)rs.onclick=e=>{e.preventDefault();S.ship.manual=false;$('#c-ship-amt').value=sug.toFixed(2);renderCart()};
+  total+=shipAmt;
   $('#c-total').textContent=money(total);
   const req=needsMember(S.pay),partyOk=!req||$('#c-party').value.trim()!=='';
   $('#c-party-lbl').textContent=req?`Member name (required for ${S.pay})`:'Sold to (optional)';
@@ -564,7 +584,7 @@ function renderCart(){
   const dl=$('#c-members'),names=memberNames();if(dl.childElementCount!==names.length)dl.innerHTML=names.map(n=>`<option value="${esc(n)}">`).join('');
   $('#c-go').disabled=!S.cart.size||S.busy||!partyOk;
   $('#cartbar').style.display=S.cart.size?'flex':'none';
-  $('#cb-txt').textContent=`${units} item${units===1?'':'s'} · ${money(total)}`;
+  $('#cb-txt').textContent=`${units} item${units===1?'':'s'}${shipAmt?' + shipping':''} · ${money(total)}`;
 }
 $('#s-q').addEventListener('input',renderSell);
 $('#s-oos').checked=store('qm_oos')==='1';
@@ -593,7 +613,10 @@ $('#c-lines').addEventListener('change',e=>{
 });
 $('#c-pay').addEventListener('click',e=>{const b=e.target.closest('[data-p]');if(!b)return;S.pay=b.dataset.p;renderCart();if(needsMember(S.pay)&&!$('#c-party').value.trim())$('#c-party').focus()});
 $('#c-party').addEventListener('input',renderCart);
-$('#c-clear').onclick=()=>{S.cart.clear();$('#c-party').value='';$('#c-note').value='';renderSell();syncCartSoon()};
+function resetShip(){S.ship={on:false,manual:false};$('#c-ship-amt').value='';$('#c-ship-to').value=''}
+$('#c-ship-on').addEventListener('change',e=>{S.ship.on=e.target.checked;if(S.ship.on)S.ship.manual=false;renderCart();if(S.ship.on&&!$('#c-ship-amt').value)$('#c-ship-amt').focus()});
+$('#c-ship-amt').addEventListener('input',()=>{S.ship.manual=true;renderCart()});
+$('#c-clear').onclick=()=>{S.cart.clear();$('#c-party').value='';$('#c-note').value='';resetShip();renderSell();syncCartSoon()};
 $('#cb-go').onclick=()=>$('#cart').scrollIntoView({behavior:'smooth'});
 $('#c-go').onclick=async()=>{
   if(!S.cart.size)return;
@@ -603,12 +626,16 @@ $('#c-go').onclick=async()=>{
   const oversell=[...S.cart.values()].some(l=>l.qty>onHand(l.id));
   if(oversell&&!confirm('Some items show more sold than on hand. Record the sale anyway? (Stock will go negative until corrected.)'))return;
   const lines=[...S.cart.values()].map(l=>({id:l.id,qty:l.qty,price:l.price}));
-  const tot=lines.reduce((s,l)=>s+l.qty*l.price,0),pay=S.pay;
+  const shipOn=S.ship.on&&!needsMember(S.pay);
+  const shipAmt=shipOn?r2(num($('#c-ship-amt').value)):0;
+  if(shipOn&&!(shipAmt>0)){toast('Enter a shipping amount or untick “Add shipping”');$('#c-ship-amt').focus();return}
+  const shipping=shipOn?{on:true,amount:shipAmt,to:$('#c-ship-to').value.trim()}:null;
+  const tot=lines.reduce((s,l)=>s+l.qty*l.price,0)+shipAmt,pay=S.pay;
   const btn=$('#c-go');btn.textContent='Saving…';btn.disabled=true;
   clearTimeout(syncT);
-  const ok=await write('recordSale',{lines,pay,party:$('#c-party').value,note:$('#c-note').value,allowNegative:oversell},`Sale recorded · ${money(tot)} ${pay}`);
+  const ok=await write('recordSale',{lines,pay,party:$('#c-party').value,note:$('#c-note').value,allowNegative:oversell,shipping},`Sale recorded · ${money(tot)} ${pay}`);
   btn.textContent='Complete sale';
-  if(ok){S.cart.clear();$('#c-party').value='';$('#c-note').value=''}
+  if(ok){S.cart.clear();$('#c-party').value='';$('#c-note').value='';resetShip()}
   renderSell();
 };
 
@@ -667,8 +694,8 @@ function payModal(t){
 }
 function histModal(t){
   let run=0;
-  const rows=t.rows.map(e=>{const charge=e.type==='sale';run=r2(run+(charge?num(e.total):-num(e.total)));
-    return `<tr><td>${new Date(e.ts).toLocaleDateString()}</td><td>${charge?esc(e.itemName)+(num(e.qty)!==-1?` × ${-num(e.qty)}`:''):`<span class="tag t-payment">Payment · ${esc(e.pay)}</span>`}${e.note?`<div class="muted" style="font-size:.85rem">${esc(e.note)}</div>`:''}</td>
+  const rows=t.rows.map(e=>{const charge=e.type==='sale'||e.type==='shipping';run=r2(run+(charge?num(e.total):-num(e.total)));
+    return `<tr><td>${new Date(e.ts).toLocaleDateString()}</td><td>${charge?(e.type==='shipping'?'Shipping':esc(e.itemName)+(num(e.qty)!==-1?` × ${-num(e.qty)}`:'')):`<span class="tag t-payment">Payment · ${esc(e.pay)}</span>`}${e.note?`<div class="muted" style="font-size:.85rem">${esc(e.note)}</div>`:''}</td>
     <td class="num money">${charge?money(num(e.total)):''}</td><td class="num money pos">${charge?'':money(num(e.total))}</td><td class="num money"><b>${money(run)}</b></td></tr>`}).reverse().join('');
   openModal(`<h3>${esc(t.name)} — tab history</h3>
     <p style="margin-top:0">Charged ${money(t.charged)} · Paid ${money(t.paid)} · <b class="${t.balance>0.004?'neg':''}">Balance ${money(t.balance)}</b></p>
@@ -771,6 +798,7 @@ function itemModal(it){
     <div class="grow"><label for="f-cost">Unit cost ($)</label><input id="f-cost" type="number" step="0.01" min="0" value="${it.cost!=null?it.cost:''}"></div></div>
     <div class="row"><div class="grow"><label for="f-sale">Sale price ($)</label><input id="f-sale" type="number" step="0.01" min="0" value="${num(it.salePrice)>0?it.salePrice:''}" placeholder="e.g. 5.00"></div>
     <div class="grow"><label>&nbsp;</label><label class="row" style="color:var(--ink);margin:0;min-height:44px"><input type="checkbox" id="f-onsale" style="width:auto;min-height:0" ${it.onSale?'checked':''}> On sale now</label></div></div>
+    <div class="row"><div class="grow"><label for="f-ship">Shipping per unit ($)</label><input id="f-ship" type="number" step="0.01" min="0" value="${num(it.shipPrice)>0?it.shipPrice:''}" placeholder="Leave blank if not shipped"></div><div class="grow"></div></div>
     <div class="row"><div class="grow"><label for="f-reorder">Reorder when at or below</label><input id="f-reorder" type="number" step="1" min="0" value="${num(it.reorder)}"></div>
     <div class="grow"><label for="f-sku">SKU / part #</label><input id="f-sku" value="${esc(it.sku||'')}" placeholder="Auto-generated if blank"></div></div>
     ${!isNew&&siblings>1?`<label class="row" style="color:var(--ink)"><input type="checkbox" id="f-share" style="width:auto;min-height:0" checked> Use this picture &amp; description for all ${siblings} sizes of “${esc(it.name)}”</label>`:''}
@@ -782,7 +810,7 @@ function itemModal(it){
       <div class="row"><button class="btn" data-x>Cancel</button>${!isNew?'<button class="btn" data-dup>Save as new size…</button>':''}<button class="btn pri" data-ok>Save</button></div>
     </div>`,md=>{
     const g=id=>md.querySelector('#'+id);
-    const read=()=>({name:g('f-name').value.trim(),cat:g('f-cat').value,size:g('f-size').value.trim(),price:r2(num(g('f-price').value)),cost:r2(num(g('f-cost').value)),reorder:Math.max(0,Math.round(num(g('f-reorder').value))),sku:g('f-sku').value.trim(),salePrice:g('f-sale').value===''?'':r2(num(g('f-sale').value)),onSale:g('f-onsale').checked,description:g('f-desc').value.trim()});
+    const read=()=>({name:g('f-name').value.trim(),cat:g('f-cat').value,size:g('f-size').value.trim(),price:r2(num(g('f-price').value)),cost:r2(num(g('f-cost').value)),reorder:Math.max(0,Math.round(num(g('f-reorder').value))),sku:g('f-sku').value.trim(),salePrice:g('f-sale').value===''?'':r2(num(g('f-sale').value)),shipPrice:g('f-ship').value===''?'':r2(num(g('f-ship').value)),onSale:g('f-onsale').checked,description:g('f-desc').value.trim()});
     g('f-file').onchange=async e=>{
       const f=e.target.files&&e.target.files[0];if(!f)return;
       g('f-pic-msg').textContent='Processing…';
@@ -905,23 +933,87 @@ function fillMonths(sel){
   sel.innerHTML='<option value="all">All time</option>'+ms.map(m=>`<option value="${m}">${monthLabel(m)}</option>`).join('');
   sel.value=(cur&&[...sel.options].some(o=>o.value===cur))?cur:ms[0];
 }
+function shipModal(saleId){
+  const lines=S.entries.filter(e=>e.sale===saleId&&e.type==='sale'&&!S.voided.has(e.id));
+  if(!lines.length){toast('Sale not found');return}
+  const methods=S.settings.pays.filter(p=>!needsMember(p));
+  if(!methods.length){toast('Add a payment method in Settings first');return}
+  const sug=r2(lines.reduce((s,e)=>s+(-num(e.qty))*num((S.items.get(e.itemId)||{}).shipPrice),0));
+  const first=lines[0];
+  let pm=methods.includes(first.pay)?first.pay:methods[0];
+  const total=lines.reduce((s,e)=>s+num(e.total),0);
+  openModal(`<h3>Add shipping to sale</h3>
+    <p class="muted" style="margin-top:0">${new Date(first.ts).toLocaleString()} · ${esc(first.pay)} · ${money(total)}${first.party?' · '+esc(first.party):''}</p>
+    <div class="tw" style="max-height:10rem;overflow:auto"><table><tbody>${lines.map(e=>`<tr><td>${esc(e.itemName)}</td><td class="num">× ${-num(e.qty)}</td><td class="num money">${money(num(e.total))}</td></tr>`).join('')}</tbody></table></div>
+    <label for="sh-amt">Shipping ($)</label><input id="sh-amt" type="number" step="0.01" min="0.01" inputmode="decimal" value="${sug>0?sug.toFixed(2):''}">
+    <div class="muted" style="font-size:.85rem;margin-top:.2rem">${sug>0?`Suggested ${money(sug)} from item shipping rates.`:'No shipping rate set on these items — enter the amount.'}</div>
+    <label>Paid with</label><div class="seg" id="sh-pm">${methods.map(m=>`<button data-m="${esc(m)}" class="${m===pm?'on':''}">${esc(m)}</button>`).join('')}</div>
+    <label for="sh-to">Ship to (optional)</label><input id="sh-to" placeholder="Name, address" value="${esc(first.party||'')}">
+    <label for="sh-note">Note (optional)</label><input id="sh-note" placeholder="e.g. tracking number">
+    <div class="row" style="margin-top:1rem;justify-content:flex-end"><button class="btn" data-x>Cancel</button><button class="btn pri" data-ok>Add shipping</button></div>`,md=>{
+    md.querySelector('#sh-pm').onclick=e=>{const b=e.target.closest('[data-m]');if(!b)return;pm=b.dataset.m;md.querySelectorAll('#sh-pm button').forEach(x=>x.classList.toggle('on',x===b))};
+    md.querySelector('[data-x]').onclick=closeModal;
+    md.querySelector('[data-ok]').onclick=async()=>{
+      const a=r2(num(md.querySelector('#sh-amt').value));
+      if(!(a>0)){toast('Enter a shipping amount');md.querySelector('#sh-amt').focus();return}
+      if(await write('addShipping',{saleId,amount:a,pay:pm,to:md.querySelector('#sh-to').value.trim(),note:md.querySelector('#sh-note').value.trim()},`Shipping added · ${money(a)} ${pm}`))closeModal();
+    };
+  });
+}
+function pastSalesModal(){
+  const since=Date.now()-60*86400000;
+  const bySale=new Map();
+  for(const e of S.entries){
+    if(e.type!=='sale'||!e.sale||S.voided.has(e.id)||e.ts<since||isCharge(e))continue;
+    const g=bySale.get(e.sale)||{sale:e.sale,ts:e.ts,pay:e.pay,party:e.party||'',who:e.who||'',items:[],total:0};
+    g.items.push(`${e.itemName}${-num(e.qty)>1?' ×'+(-num(e.qty)):''}`);g.total+=num(e.total);
+    bySale.set(e.sale,g);
+  }
+  const list=[...bySale.values()].filter(g=>!saleHasShipping(g.sale)).sort((a,b)=>b.ts-a.ts);
+  openModal(`<h3>Add shipping to a past sale</h3>
+    <p class="muted" style="margin-top:0">Sales from the last 60 days without shipping. Club Account sales can’t have shipping.</p>
+    <input id="ps-q" type="search" data-nodirty placeholder="Search item, buyer…">
+    <div class="tw" style="margin-top:.6rem;max-height:55vh;overflow:auto"><table><tbody id="ps-body"></tbody></table></div>
+    <div class="row" style="margin-top:.8rem;justify-content:flex-end"><button class="btn" data-x>Close</button></div>`,md=>{
+    const body=md.querySelector('#ps-body'),q=md.querySelector('#ps-q');
+    const draw=()=>{
+      const k=q.value.trim().toLowerCase();
+      const rows=list.filter(g=>!k||(g.items.join(' ')+' '+g.party+' '+g.pay).toLowerCase().includes(k)).slice(0,100);
+      body.innerHTML=rows.length?rows.map(g=>`<tr data-s="${esc(g.sale)}"><td class="wrap"><b>${esc(g.items.join(', '))}</b><div class="muted" style="font-size:.85rem">${new Date(g.ts).toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})} · ${esc(g.pay)}${g.party?' · '+esc(g.party):''}</div></td><td class="num money">${money(g.total)}</td><td><button class="btn sm pri" data-ship>Ship</button></td></tr>`).join('')
+        :'<tr><td class="empty">No matching sales.</td></tr>';
+    };
+    q.addEventListener('input',draw);draw();
+    body.addEventListener('click',e=>{const b=e.target.closest('[data-ship]');if(!b)return;const sid=b.closest('tr').dataset.s;closeModal();shipModal(sid)});
+    md.querySelector('[data-x]').onclick=closeModal;
+  });
+  $('#md').style.maxWidth='640px';
+}
+$('#c-pastship').onclick=pastSalesModal;
+function saleHasShipping(sid){return S.entries.some(e=>e.sale===sid&&e.type==='shipping'&&!S.voided.has(e.id))}
 function renderLedger(){
   fillMonths($('#lg-month'));
   const m=$('#lg-month').value,t=$('#lg-type').value,q=$('#lg-q').value.trim().toLowerCase();
   const rows=S.entries.filter(e=>(m==='all'||monthKey(new Date(e.ts))===m)&&(!t||e.type===t)&&(!q||[e.itemName,e.who,e.party,e.note,e.pay].join(' ').toLowerCase().includes(q)));
+  const firstOfSale={};
+  for(const e of rows)if(e.type==='sale'&&e.sale&&!S.voided.has(e.id)&&!firstOfSale[e.sale])firstOfSale[e.sale]=e.id;
   $('#lg-body').innerHTML=rows.length?rows.slice(0,1000).map(e=>{
     const v=S.voided.has(e.id),d=new Date(e.ts);
-    const amt=e.type==='sale'||e.type==='payment'?e.total:e.type==='receive'?-e.total:null;
+    const amt=e.type==='sale'||e.type==='payment'||e.type==='shipping'?e.total:e.type==='receive'?-e.total:null;
     const qty=e.type==='void'?'':`<span class="${e.qty>0?'pos':'neg'}">${e.qty>0?'+':''}${e.qty}</span>`;
     return `<tr class="${v?'voided':''}" data-id="${esc(e.id)}"><td>${d.toLocaleDateString()} <span class="muted">${d.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})}</span></td>
     <td><span class="tag t-${esc(e.type)}">${TYPES[e.type]||esc(e.type)}</span></td><td>${esc(e.itemName)}</td><td class="num">${qty}</td>
     <td class="num money">${amt==null?'':`<span class="${amt>=0?'pos':'neg'}">${money(amt)}</span>`}${e.type==='sale'&&e.priceType==='sale'?' <span class="salebadge">SALE</span>':''}${e.type==='sale'&&e.priceType==='override'?' <span class="tag">override</span>':''}${isCharge(e)?' <span class="tag">on tab</span>':''}</td><td>${esc(e.pay)}</td><td>${esc(e.who)}</td>
     <td class="wrap">${esc([e.party,e.note].filter(Boolean).join(' · '))}${v?' <span class="tag t-void">voided</span>':''}</td>
-    <td>${(!v&&e.type!=='void')?'<button class="btn sm" data-void>Void</button>':''}</td></tr>`;
+    <td><div class="row" style="flex-wrap:nowrap;justify-content:flex-end">${e.type==='sale'&&!v&&e.sale&&firstOfSale[e.sale]===e.id&&!isCharge(e)&&!saleHasShipping(e.sale)?'<button class="btn sm" data-ship>Ship</button>':''}${(!v&&e.type!=='void')?'<button class="btn sm" data-void>Void</button>':''}</div></td></tr>`;
   }).join(''):'<tr><td colspan="9" class="empty">No entries for this selection.</td></tr>';
 }
 ['#lg-month','#lg-type','#lg-q'].forEach(s=>$(s).addEventListener('input',renderLedger));
 $('#lg-body').addEventListener('click',e=>{
+  if(e.target.closest('[data-ship]')){
+    const en=S.entries.find(x=>x.id===e.target.closest('tr').dataset.id);
+    if(en)shipModal(en.sale);
+    return;
+  }
   if(!e.target.closest('[data-void]'))return;
   const en=S.entries.find(x=>x.id===e.target.closest('tr').dataset.id);if(!en)return;
   openModal(`<h3>Void this entry?</h3><p><b>${TYPES[en.type]}</b> · ${esc(en.itemName)} · qty ${en.qty}${en.total?' · '+money(en.total):''}</p>
@@ -953,12 +1045,14 @@ function renderReports(){
     <div class="card stat"><div class="v money ${rev-cogs<0?'neg':''}">${money(rev-cogs)}</div><div class="l">Gross profit${rev?` · ${Math.round((rev-cogs)/rev*100)}%`:''}</div></div>
     <div class="card stat"><div class="v money">${money(purch)}</div><div class="l">Stock purchased</div></div>
     <div class="card stat"><div class="v">${units}</div><div class="l">Units sold · ${tx} sale${tx===1?'':'s'}</div></div>`;
-  const byPay={};const slot=k=>byPay[k]=byPay[k]||{n:new Set(),a:0,t:0};
+  const byPay={};const slot=k=>byPay[k]=byPay[k]||{n:new Set(),a:0,t:0,s:0};
   for(const e of sales){const b=slot(e.pay||'—');b.n.add(e.sale||e.id);b.a+=num(e.total)}
+  const ships=es.filter(e=>e.type==='shipping');let shipTot=0;
+  for(const e of ships){slot(e.pay||'—').s+=num(e.total);shipTot+=num(e.total)}
   const pays=es.filter(e=>e.type==='payment');let tin=0;
   for(const e of pays){slot(e.pay||'—').t+=num(e.total);tin+=num(e.total)}
-  const pk=Object.keys(byPay).sort((a,b)=>(byPay[b].a+byPay[b].t)-(byPay[a].a+byPay[a].t));
-  $('#rp-pay').innerHTML=pk.length?pk.map(k=>`<tr><td>${esc(k)}${needsMember(k)?' <span class="tag">on tab</span>':''}</td><td class="num">${byPay[k].n.size}</td><td class="num money">${money(byPay[k].a)}</td><td class="num money">${byPay[k].t?money(byPay[k].t):'—'}</td></tr>`).join('')+`<tr><td><b>Total</b></td><td class="num"><b>${tx}</b></td><td class="num money"><b>${money(rev)}</b></td><td class="num money"><b>${money(tin)}</b></td></tr>`:'<tr><td colspan="4" class="empty">No sales or tab payments.</td></tr>';
+  const pk=Object.keys(byPay).sort((a,b)=>(byPay[b].a+byPay[b].t+byPay[b].s)-(byPay[a].a+byPay[a].t+byPay[a].s));
+  $('#rp-pay').innerHTML=pk.length?pk.map(k=>`<tr><td>${esc(k)}${needsMember(k)?' <span class="tag">on tab</span>':''}</td><td class="num">${byPay[k].n.size}</td><td class="num money">${money(byPay[k].a)}</td><td class="num money">${byPay[k].s?money(byPay[k].s):'—'}</td><td class="num money">${byPay[k].t?money(byPay[k].t):'—'}</td></tr>`).join('')+`<tr><td><b>Total</b></td><td class="num"><b>${tx}</b></td><td class="num money"><b>${money(rev)}</b></td><td class="num money"><b>${money(shipTot)}</b></td><td class="num money"><b>${money(tin)}</b></td></tr>`:'<tr><td colspan="5" class="empty">No sales or tab payments.</td></tr>';
   const byItem={};
   for(const e of sales){const k=e.itemId;byItem[k]=byItem[k]||{name:e.itemName,u:0,r:0,c:0};byItem[k].u-=num(e.qty);byItem[k].r+=num(e.total);byItem[k].c+=(-num(e.qty))*num(e.cost)}
   const top=Object.values(byItem).sort((a,b)=>b.r-a.r).slice(0,15);
@@ -977,7 +1071,7 @@ function renderReports(){
   $('#rp-ptype').innerHTML=[['regular','Regular'],['sale','Sale'],['override','Changed at checkout']].map(([k,l])=>`<tr><td>${l}</td><td class="num">${pt[k].u}</td><td class="num money">${money(pt[k].r)}</td><td class="num money">${pt[k].d?money(pt[k].d):'—'}</td></tr>`).join('')+
     `<tr><td><b>Total</b></td><td class="num"><b>${units}</b></td><td class="num money"><b>${money(rev)}</b></td><td class="num money"><b>${money(disc)}</b></td></tr>`;
   const outstanding=[...tabs().values()].reduce((s,t)=>s+Math.max(0,t.balance),0);
-  $('#rp-stats').insertAdjacentHTML('beforeend',`<div class="card stat"><div class="v money">${money(disc)}</div><div class="l">Discounts given</div></div><div class="card stat"><div class="v money ${outstanding>0?'neg':''}">${money(outstanding)}</div><div class="l">Tabs outstanding (all time)</div></div>`);
+  $('#rp-stats').insertAdjacentHTML('beforeend',`<div class="card stat"><div class="v money">${money(disc)}</div><div class="l">Discounts given</div></div><div class="card stat"><div class="v money">${money(shipTot)}</div><div class="l">Shipping collected (not in revenue)</div></div><div class="card stat"><div class="v money ${outstanding>0?'neg':''}">${money(outstanding)}</div><div class="l">Tabs outstanding (all time)</div></div>`);
   $('#rp-shrink').innerHTML=Object.entries(sh).map(([k,x])=>`<tr><td>${TYPES[k]}</td><td class="num ${x.u<0?'neg':''}">${x.u}</td><td class="num money">${money(x.v)}</td></tr>`).join('');
 }
 $('#rp-month').addEventListener('input',renderReports);
