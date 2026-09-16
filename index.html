@@ -114,6 +114,14 @@ table{border-collapse:collapse;width:100%;font-size:.95rem}
 th,td{padding:.55rem .7rem;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle;white-space:nowrap}
 th{font-family:"Barlow Condensed",sans-serif;font-size:1rem;font-weight:600;color:var(--muted);background:var(--surface2);position:sticky;top:0}
 tr.low td{background:color-mix(in srgb,var(--warn) 12%,transparent)}
+th.act,td.act{position:sticky;right:0;z-index:1;background:var(--surface);box-shadow:-8px 0 8px -8px rgba(0,0,0,.25);text-align:right}
+th.act{background:var(--surface2);z-index:2}
+tr.low td.act{background:color-mix(in srgb,var(--warn) 12%,var(--surface))}
+#rowmenu{display:none;position:fixed;z-index:25;min-width:190px;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.2);padding:.3rem}
+#rowmenu.on{display:block}
+#rowmenu button{display:block;width:100%;text-align:left;background:none;border:0;border-radius:6px;padding:.65rem .7rem;min-height:44px;cursor:pointer;font:inherit;color:inherit}
+#rowmenu button:hover{background:var(--surface2)}
+.pending{display:inline-block;margin-left:.5rem;padding:.05rem .5rem;border-radius:999px;font-size:.78rem;font-weight:600;background:var(--surface2);color:var(--muted);vertical-align:middle}
 tr.voided td{text-decoration:line-through;color:var(--muted)}
 td.wrap{white-space:normal;min-width:10rem}
 .tag{display:inline-block;padding:.05rem .5rem;border-radius:4px;font-size:.8rem;background:var(--surface2)}
@@ -204,7 +212,7 @@ body.role-user .admin-only{display:none!important}
         <div class="tiles" id="s-tiles"></div>
       </div>
       <div class="card cart" id="cart">
-        <h3>Current sale</h3>
+        <h3>Current sale<span class="pending" id="c-pending" style="display:none"></span></h3>
         <div id="c-lines"></div>
         <div id="c-ship" style="display:none">
           <label class="row" style="color:var(--ink);margin:.7rem 0 0"><input type="checkbox" id="c-ship-on" style="width:auto;min-height:0"> Add shipping</label>
@@ -254,7 +262,7 @@ body.role-user .admin-only{display:none!important}
     </div>
     <div class="stats" id="st-stats" style="margin-top:1rem"></div>
     <div id="st-orphan"></div>
-    <div class="tw"><table><thead><tr><th>Item</th><th>Category</th><th>Size / variant</th><th class="num">On hand</th><th class="num">Reorder at</th><th class="num">Price</th><th class="num">Unit cost</th><th class="num">Stock value</th><th class="admin-only"></th></tr></thead><tbody id="st-body"></tbody></table></div>
+    <div class="tw"><table><thead><tr><th>Item</th><th>Category</th><th>Size / variant</th><th class="num">On hand</th><th class="num">Reorder at</th><th class="num">Price</th><th class="num">Unit cost</th><th class="num">Stock value</th><th class="admin-only act"></th></tr></thead><tbody id="st-body"></tbody></table></div>
   </section>
 
   <section id="v-ledger">
@@ -271,7 +279,7 @@ body.role-user .admin-only{display:none!important}
       <input id="lg-q" class="grow" type="search" placeholder="Search item, person, note…">
     </div>
     <p class="muted" style="margin:.5rem 0">Entries are never deleted. Mistakes are voided, which keeps the audit trail.</p>
-    <div class="tw"><table><thead><tr><th>Date</th><th>Type</th><th>Item</th><th class="num">Qty</th><th class="num">Amount</th><th>Payment</th><th>Recorded by</th><th>Party / note</th><th></th></tr></thead><tbody id="lg-body"></tbody></table></div>
+    <div class="tw"><table><thead><tr><th>Date</th><th>Type</th><th>Item</th><th class="num">Qty</th><th class="num">Amount</th><th>Payment</th><th>Recorded by</th><th>Party / note</th><th class="act"></th></tr></thead><tbody id="lg-body"></tbody></table></div>
   </section>
 
   <section id="v-reports">
@@ -326,6 +334,7 @@ body.role-user .admin-only{display:none!important}
 </main>
 <div id="ov"><div id="md"></div></div>
 <div id="toast"></div>
+<div id="rowmenu" role="menu"></div>
 
 <script>
 (function(){
@@ -386,9 +395,17 @@ async function callNow(fn,arg){
   let res,out,lastErr;
   for(let attempt=0;attempt<(READ?3:1);attempt++){
     if(attempt)await new Promise(r=>setTimeout(r,attempt*900));
+    const ctl=new AbortController(),limit=READ?25000:60000;
+    const timer=setTimeout(()=>ctl.abort(),limit);
     try{
-      res=await fetch(CFG.API_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({fn,arg:arg||{},idToken:AUTH.token,session:SESSION}),redirect:'follow'});
-    }catch(e){lastErr=Object.assign(new Error('Network error — check your connection'),{ran:false});continue}
+      res=await fetch(CFG.API_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({fn,arg:arg||{},idToken:AUTH.token,session:SESSION}),redirect:'follow',signal:ctl.signal});
+    }catch(e){
+      clearTimeout(timer);
+      const timedOut=e&&e.name==='AbortError';
+      lastErr=Object.assign(new Error(timedOut?'The server took too long to answer':'Network error — check your connection'),{ran:timedOut?null:false,timedOut});
+      continue;
+    }
+    clearTimeout(timer);
     const ran=res.redirected||/googleusercontent\.com/.test(res.url||'');
     if(!res.ok){lastErr=Object.assign(new Error('Server error ('+res.status+')'),{status:res.status,ran});continue}
     try{out=await res.json();lastErr=null;break}
@@ -409,7 +426,7 @@ async function callNow(fn,arg){
 const S={
   items:new Map(),entries:[],stock:{},voided:new Set(),email:'',url:'#',
   settings:{club:'Quartermaster',cats:[],pays:[]},
-  images:new Map(),held:{},ship:{on:false,manual:false},users:[],role:'',owner:'',imgPending:new Set(),cart:new Map(),pay:null,cat:'',view:'sell',busy:false,loaded:false
+  images:new Map(),held:{},pending:0,pendDec:{},ship:{on:false,manual:false},users:[],role:'',owner:'',imgPending:new Set(),cart:new Map(),pay:null,cat:'',view:'sell',busy:false,loaded:false
 };
 const TYPES={sale:'Sale',shipping:'Shipping',payment:'Tab payment',receive:'Received',adjust:'Count adj.',loss:'Loss / damage',comp:'Comp / give-away',void:'Void'};
 
@@ -466,6 +483,7 @@ function apply(d){
   S.voided=new Set(S.entries.filter(e=>e.voided).map(e=>e.id));
   const st={};
   for(const e of S.entries){if(e.type==='void'||e.voided)continue;st[e.itemId]=(st[e.itemId]||0)+num(e.qty)}
+  for(const id in S.pendDec)st[id]=(st[id]||0)-S.pendDec[id];
   S.stock=st;S.settings=d.settings;S.loaded=true;S.email=d.email||'';S.url=d.url||'#';S.held=d.held||{};S.role=d.role||'user';S.users=d.users||[];S.owner=d.owner||'';applyRole();
   $('#lg-open').href=S.url;$('#rp-open').href=S.url;
   banner('');showWho();refresh();ensureImages();
@@ -537,7 +555,7 @@ async function write(fn,arg,okMsg){
   S.busy=true;
   try{apply(await call(fn,Object.assign({name:who()},arg)));if(okMsg)toast(okMsg);return true}
   catch(e){
-    if(e&&e.ran){toast('Couldn’t confirm the save — refreshing. Check it before trying again.',7000);load()}
+    if(e&&(e.ran||e.timedOut)){toast('Couldn’t confirm the save — refreshing. Check it before trying again.',7000);load()}
     else toast('Not saved: '+friendly(e),5000);
     return false;
   }
@@ -659,7 +677,8 @@ function renderCart(){
   $('#c-party').style.borderColor=req&&!partyOk?'var(--bad)':'';
   const msg=$('#c-party-msg');msg.style.display=req&&!partyOk&&S.cart.size?'block':'none';msg.textContent=`Enter the member this ${S.pay} charge goes on.`;
   const dl=$('#c-members'),names=memberNames();if(dl.childElementCount!==names.length)dl.innerHTML=names.map(n=>`<option value="${esc(n)}">`).join('');
-  $('#c-go').disabled=!S.cart.size||S.busy||!partyOk;
+  $('#c-go').disabled=!S.cart.size||!partyOk;
+  const pe=$('#c-pending');pe.style.display=S.pending?'':'none';pe.textContent=S.pending?`Saving ${S.pending} sale${S.pending===1?'':'s'}…`:'';
   $('#cartbar').style.display=S.cart.size?'flex':'none';
   $('#cb-txt').textContent=`${units} item${units===1?'':'s'}${shipAmt?' + shipping':''} · ${money(total)}`;
 }
@@ -711,13 +730,43 @@ $('#c-go').onclick=async()=>{
   if(shipOn&&!(shipAmt>0)){toast('Enter a shipping amount or untick “Add shipping”');$('#c-ship-amt').focus();return}
   const shipping=shipOn?{on:true,amount:shipAmt,to:$('#c-ship-to').value.trim()}:null;
   const tot=lines.reduce((s,l)=>s+l.qty*l.price,0)+shipAmt,pay=S.pay;
-  const btn=$('#c-go');btn.textContent='Saving…';btn.disabled=true;
   clearTimeout(syncT);
-  const ok=await write('recordSale',{lines,pay,party:$('#c-party').value,note:$('#c-note').value,allowNegative:oversell,shipping},`Sale recorded · ${money(tot)} ${pay}`);
-  btn.textContent='Complete sale';
-  if(ok){S.cart.clear();$('#c-party').value='';$('#c-note').value='';resetShip()}
-  renderSell();
+  const snap={cart:[...S.cart.values()].map(l=>({...l})),pay,party:$('#c-party').value,note:$('#c-note').value,ship:{...S.ship},shipAmt:$('#c-ship-amt').value,shipTo:$('#c-ship-to').value};
+  const payload={name:who(),lines,pay,party:snap.party,note:snap.note,allowNegative:oversell,shipping};
+  S.cart.clear();$('#c-party').value='';$('#c-note').value='';resetShip();
+  for(const l of lines){S.stock[l.id]=(S.stock[l.id]||0)-l.qty;S.pendDec[l.id]=(S.pendDec[l.id]||0)+l.qty}
+  const undoDec=()=>{for(const l of lines){S.pendDec[l.id]-=l.qty;if(S.pendDec[l.id]<=0)delete S.pendDec[l.id]}};
+  S.pending++;renderSell();
+  toast(`Saving sale · ${money(tot)} ${pay}…`,2500);
+  try{
+    const data=await call('recordSale',payload);
+    undoDec();apply(data);
+    toast(`Sale recorded · ${money(tot)} ${pay}`);
+  }catch(e){
+    undoDec();for(const l of lines)S.stock[l.id]=(S.stock[l.id]||0)+l.qty;
+    const what=snap.cart.map(l=>`${label(S.items.get(l.id))} × ${l.qty}`).join(', ');
+    if(e&&(e.ran||e.timedOut)){
+      saleProblem('Couldn’t confirm this sale',`<p>${esc(what)} — ${money(tot)} ${esc(pay)}${snap.party?' · '+esc(snap.party):''}</p><p>The server may have saved it. Check the Stock / Tabs before entering it again.</p>`,null);
+      load();
+    }else{
+      restoreCart(snap);
+      saleProblem('Sale not saved',`<p>${esc(friendly(e))}</p><p>${esc(what)} — ${money(tot)} ${esc(pay)}</p><p>The cart has been restored so you can fix it and try again.</p>`,true);
+    }
+  }finally{S.pending--;renderSell()}
 };
+function restoreCart(snap){
+  if(S.cart.size){for(const l of snap.cart){const c=S.cart.get(l.id);if(c)c.qty+=l.qty;else S.cart.set(l.id,l)}}
+  else{
+    for(const l of snap.cart)S.cart.set(l.id,l);
+    S.pay=snap.pay;$('#c-party').value=snap.party;$('#c-note').value=snap.note;
+    S.ship=snap.ship;$('#c-ship-amt').value=snap.shipAmt;$('#c-ship-to').value=snap.shipTo;
+  }
+  renderSell();syncCartSoon();
+}
+function saleProblem(title,html){
+  if($('#ov').classList.contains('on')){toast(title+' — see Stock / Tabs',8000);return}
+  openModal(`<h3>${esc(title)}</h3>${html}<div class="row" style="justify-content:flex-end;margin-top:1rem"><button class="btn pri" data-x>OK</button></div>`,md=>md.querySelector('[data-x]').onclick=closeModal);
+}
 
 
 function renderTabs(){
@@ -843,17 +892,45 @@ function renderStock(){
     return `<tr class="${isLow?'low':''}" data-id="${esc(i.id)}"><td><div class="itemcell">${thumb(i,'mini')}<div><b>${esc(i.name)}</b>${i.sku?` <span class="muted">· ${esc(i.sku)}</span>`:''}${i.active===false?' <span class="tag">archived</span>':''}${i.description?`<div class="desc">${esc(i.description)}</div>`:''}</div></div></td>
     <td>${esc(i.cat)}</td><td>${esc(i.size)}</td><td class="num ${oh<0?'neg':''}"><b>${oh}</b>${heldElsewhere(i.id)?`<div class="muted" style="font-size:.8rem">${heldElsewhere(i.id)} in carts</div>`:''}</td><td class="num">${num(i.reorder)}</td>
     <td class="num money">${priceHtml(i)}${isOnSale(i)&&num(i.salePrice)<num(i.cost)?'<div class="neg" style="font-size:.8rem">below cost</div>':''}</td><td class="num money">${money(num(i.cost))}</td><td class="num money">${money(Math.max(0,oh)*num(i.cost))}</td>
-    <td class="admin-only"><div class="row" style="flex-wrap:nowrap"><button class="btn sm" data-a="receive">Receive</button><button class="btn sm" data-a="move">Count / write-off</button><button class="btn sm" data-a="edit">Edit</button></div></td></tr>`;
+    <td class="admin-only act"><button class="btn sm" data-manage>Manage ▾</button></td></tr>`;
   }).join(''):`<tr><td colspan="9" class="empty">${S.items.size?'No items match.':'No items yet. Tap “Add item” to start.'}</td></tr>`;
 }
 ['#st-q','#st-cat','#st-low','#st-arch','#st-sale-only'].forEach(s=>$(s).addEventListener('input',renderStock));
 $('#st-add').onclick=()=>itemModal(null);
 $('#st-sale').onclick=()=>saleModal();
+let rowMenuBtn=null;
+function placeRowMenu(){
+  const m=$('#rowmenu');if(!rowMenuBtn||!m.classList.contains('on'))return;
+  if(!document.body.contains(rowMenuBtn)){closeRowMenu();return}
+  const rc=rowMenuBtn.getBoundingClientRect(),mw=m.offsetWidth,mh=m.offsetHeight;
+  let left=Math.min(window.innerWidth-mw-8,rc.right-mw),top=rc.bottom+4;
+  if(top+mh>window.innerHeight-8)top=Math.max(8,rc.top-mh-4);
+  m.style.left=Math.max(8,left)+'px';m.style.top=top+'px';
+}
+function openRowMenu(btn,items){
+  const m=$('#rowmenu');rowMenuBtn=btn;
+  m.innerHTML=items.map((x,i)=>`<button type="button" data-i="${i}" role="menuitem">${esc(x.label)}</button>`).join('');
+  m.onclick=ev=>{const b=ev.target.closest('[data-i]');if(!b)return;closeRowMenu();items[+b.dataset.i].run()};
+  m.classList.add('on');placeRowMenu();
+}
+function closeRowMenu(){$('#rowmenu').classList.remove('on');rowMenuBtn=null}
+document.addEventListener('click',e=>{if(!e.target.closest('#rowmenu')&&!e.target.closest('[data-manage]'))closeRowMenu()});
+window.addEventListener('scroll',placeRowMenu,true);
+window.addEventListener('resize',closeRowMenu);
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeRowMenu()});
 $('#st-body').addEventListener('click',e=>{
   if(!isAdmin())return;
-  const b=e.target.closest('[data-a]');if(!b)return;
+  const b=e.target.closest('[data-manage]');if(!b)return;
   const it=S.items.get(b.closest('tr').dataset.id);if(!it)return;
-  if(b.dataset.a==='edit')itemModal(it);else moveModal(it,b.dataset.a==='receive'?'receive':'adjust');
+  if($('#rowmenu').classList.contains('on')&&$('#rowmenu').dataset.for===it.id){closeRowMenu();return}
+  $('#rowmenu').dataset.for=it.id;
+  openRowMenu(b,[
+    {label:'Receive stock',run:()=>moveModal(it,'receive')},
+    {label:'Physical count',run:()=>moveModal(it,'adjust')},
+    {label:'Loss / damage',run:()=>moveModal(it,'loss')},
+    {label:'Comp / give-away',run:()=>moveModal(it,'comp')},
+    {label:'Edit item',run:()=>itemModal(it)}
+  ]);
 });
 
 function itemModal(it){
@@ -1084,7 +1161,7 @@ function renderLedger(){
     <td><span class="tag t-${esc(e.type)}">${TYPES[e.type]||esc(e.type)}</span></td><td>${esc(e.itemName)}</td><td class="num">${qty}</td>
     <td class="num money">${amt==null?'':`<span class="${amt>=0?'pos':'neg'}">${money(amt)}</span>`}${e.type==='sale'&&e.priceType==='sale'?' <span class="salebadge">SALE</span>':''}${e.type==='sale'&&e.priceType==='override'?' <span class="tag">override</span>':''}${isCharge(e)?' <span class="tag">on tab</span>':''}</td><td>${esc(e.pay)}</td><td>${esc(e.who)}</td>
     <td class="wrap">${esc([e.party,e.note].filter(Boolean).join(' · '))}${v?' <span class="tag t-void">voided</span>':''}</td>
-    <td><div class="row" style="flex-wrap:nowrap;justify-content:flex-end">${e.type==='sale'&&!v&&e.sale&&firstOfSale[e.sale]===e.id&&!isCharge(e)&&!saleHasShipping(e.sale)?'<button class="btn sm" data-ship>Ship</button>':''}${(!v&&e.type!=='void')?'<button class="btn sm" data-void>Void</button>':''}</div></td></tr>`;
+    <td class="act"><div class="row" style="flex-wrap:nowrap;justify-content:flex-end">${e.type==='sale'&&!v&&e.sale&&firstOfSale[e.sale]===e.id&&!isCharge(e)&&!saleHasShipping(e.sale)?'<button class="btn sm" data-ship>Ship</button>':''}${(!v&&e.type!=='void')?'<button class="btn sm" data-void>Void</button>':''}</div></td></tr>`;
   }).join(''):'<tr><td colspan="9" class="empty">No entries for this selection.</td></tr>';
 }
 ['#lg-month','#lg-type','#lg-q'].forEach(s=>$(s).addEventListener('input',renderLedger));
@@ -1318,7 +1395,7 @@ window.addEventListener('online',()=>{netState();load()});window.addEventListene
   if(tokenValid())load().then(()=>{if(!who()&&!store('qm_asked'))nameModal()});
 })();
 if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
-setInterval(()=>{if(!document.hidden&&!S.busy&&tokenValid()&&navigator.onLine)load()},30000);
+setInterval(()=>{if(!document.hidden&&!S.busy&&!S.pending&&tokenValid()&&navigator.onLine)load()},30000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&!S.busy&&navigator.onLine)load()});
 })();
 </script>
