@@ -25,13 +25,13 @@ Installable web app (PWA) for Android, iPhone/iPad and PC. Free to run.
 |---|:---:|:---:|
 | Sell (incl. Club Account) | ✅ | ✅ |
 | Tabs — view & record payments | ✅ | ✅ |
-| Stock — view on hand & prices | ✅ | ✅ |
-| Costs, stock value | ❌ | ✅ |
+| Stock — view on hand, prices, costs, stock value | ✅ | ✅ |
+| Reports (incl. COGS, profit) | ✅ | ✅ |
 | Add/edit items, receive, count, write-off, sale pricing | ❌ | ✅ |
-| Ledger, void, Reports | ❌ | ✅ |
+| Ledger, void | ❌ | ✅ |
 | Settings, categories, user management | ❌ | ✅ |
 
-Roles are enforced server-side. Users never receive cost data, the full ledger, or the Sheet link. The Sheet owner is always admin.
+Roles are enforced server-side: all changes go through the API and are checked against the user's role. Users have read-only access to stock and reports for transparency; nobody except the owner needs access to the Sheet itself. The Sheet owner is always admin.
 
 ---
 
