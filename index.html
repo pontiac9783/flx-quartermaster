@@ -371,19 +371,36 @@ async function ensureToken(){
     showSignin(AUTH.hadToken?'Your sign-in expired. Sign in to continue.':'');
   });
 }
-async function call(fn,arg){
+let apiChain=Promise.resolve();
+function call(fn,arg){
+  const run=()=>callNow(fn,arg);
+  const p=apiChain.then(run,run);
+  apiChain=p.catch(()=>{});
+  return p;
+}
+async function callNow(fn,arg){
   if(!CFG.API_URL||/^PASTE_/.test(CFG.API_URL))throw new Error('App is not configured yet (API_URL in config.js).');
   if(!navigator.onLine)throw new Error('You are offline');
   await ensureToken();
-  const res=await fetch(CFG.API_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({fn,arg:arg||{},idToken:AUTH.token,session:SESSION}),redirect:'follow'});
-  if(!res.ok)throw new Error('Server error ('+res.status+')');
-  const out=await res.json();
+  const READ=fn==='getData'||fn==='getImages'||fn==='syncCart';
+  let res,out,lastErr;
+  for(let attempt=0;attempt<(READ?3:1);attempt++){
+    if(attempt)await new Promise(r=>setTimeout(r,attempt*900));
+    try{
+      res=await fetch(CFG.API_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({fn,arg:arg||{},idToken:AUTH.token,session:SESSION}),redirect:'follow'});
+    }catch(e){lastErr=Object.assign(new Error('Network error — check your connection'),{ran:false});continue}
+    const ran=res.redirected||/googleusercontent\.com/.test(res.url||'');
+    if(!res.ok){lastErr=Object.assign(new Error('Server error ('+res.status+')'),{status:res.status,ran});continue}
+    try{out=await res.json();lastErr=null;break}
+    catch(e){lastErr=Object.assign(new Error('Unexpected server response'),{ran:true});continue}
+  }
+  if(lastErr)throw lastErr;
   if(out.ok)return out.data;
   if(out.code==='auth'){
     const fresh=AUTH.token&&(tokenExp(AUTH.token)-Date.now()>50*60000);
     AUTH.token='';store('qm_tok','');
     if(fresh||arg&&arg.__retried){showSignin('Server rejected sign-in: '+(out.error||'unknown error'));throw new Error(out.error||'Sign-in rejected')}
-    await ensureToken();return call(fn,Object.assign({},arg,{__retried:true}));
+    await ensureToken();return callNow(fn,Object.assign({},arg,{__retried:true}));
   }
   if(out.code==='denied'){showSignin(out.error);try{google.accounts.id.disableAutoSelect()}catch(e){}AUTH.token='';store('qm_tok','')}
   throw new Error(out.error||'Request failed');
@@ -453,12 +470,36 @@ function apply(d){
   $('#lg-open').href=S.url;$('#rp-open').href=S.url;
   banner('');showWho();refresh();ensureImages();
 }
+function imgCacheGet(id){try{return localStorage.getItem('qm_img_'+id)||''}catch(e){return ''}}
+function imgCachePut(id,v){
+  try{localStorage.setItem('qm_img_'+id,v)}
+  catch(e){
+    try{Object.keys(localStorage).filter(k=>k.indexOf('qm_img_')===0).slice(0,20).forEach(k=>localStorage.removeItem(k));localStorage.setItem('qm_img_'+id,v)}catch(e2){}
+  }
+}
+function imgCachePrune(){
+  try{
+    const used=new Set([...S.items.values()].map(i=>i.imageId).filter(Boolean));
+    Object.keys(localStorage).forEach(k=>{if(k.indexOf('qm_img_')===0&&!used.has(k.slice(7)))localStorage.removeItem(k)});
+  }catch(e){}
+}
+let imgRetry=0,imgTimer=0;
 async function ensureImages(){
+  let fromCache=false;
+  for(const i of S.items.values()){
+    if(i.imageId&&!S.images.has(i.imageId)){const c=imgCacheGet(i.imageId);if(c){S.images.set(i.imageId,c);fromCache=true}}
+  }
+  if(fromCache)refresh();
   const ids=[...new Set([...S.items.values()].map(i=>i.imageId).filter(id=>id&&!S.images.has(id)&&!S.imgPending.has(id)))];
-  if(!ids.length)return;
+  if(!ids.length){imgRetry=0;imgCachePrune();return}
   ids.forEach(id=>S.imgPending.add(id));
-  try{const got=await call('getImages',{ids});for(const id of ids)S.images.set(id,got[id]||'');refresh()}
-  catch(e){}finally{ids.forEach(id=>S.imgPending.delete(id))}
+  try{
+    const got=await call('getImages',{ids});
+    for(const id of ids){if(got[id]){S.images.set(id,got[id]);imgCachePut(id,got[id])}else S.images.set(id,'')}
+    imgRetry=0;refresh();imgCachePrune();
+  }catch(e){
+    if(imgRetry<4){imgRetry++;clearTimeout(imgTimer);imgTimer=setTimeout(ensureImages,1500*imgRetry)}
+  }finally{ids.forEach(id=>S.imgPending.delete(id))}
 }
 function thumb(i,extra){
   const src=i&&i.imageId?S.images.get(i.imageId):'';
@@ -486,12 +527,20 @@ function shrinkImage(file){
     img.src=url;
   });
 }
-async function load(){try{apply(await call('getData'))}catch(e){banner('Could not load: '+friendly(e))}}
+let loadFails=0;
+async function load(){
+  try{apply(await call('getData'));loadFails=0}
+  catch(e){loadFails++;if(loadFails>=2||!S.loaded)banner('Could not load: '+friendly(e)+' — retrying automatically')}
+}
 async function write(fn,arg,okMsg){
   if(S.busy){toast('Still saving…');return false}
   S.busy=true;
   try{apply(await call(fn,Object.assign({name:who()},arg)));if(okMsg)toast(okMsg);return true}
-  catch(e){toast('Not saved: '+friendly(e),5000);return false}
+  catch(e){
+    if(e&&e.ran){toast('Couldn’t confirm the save — refreshing. Check it before trying again.',7000);load()}
+    else toast('Not saved: '+friendly(e),5000);
+    return false;
+  }
   finally{S.busy=false}
 }
 const live=()=>S.entries.filter(e=>e.type!=='void'&&!S.voided.has(e.id));
