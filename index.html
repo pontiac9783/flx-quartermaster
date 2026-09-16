@@ -171,7 +171,7 @@ body.role-user .admin-only{display:none!important}
   <button data-v="tabs">Tabs</button>
   <button data-v="stock">Stock</button>
   <button data-v="ledger" class="admin-only">Ledger</button>
-  <button data-v="reports" class="admin-only">Reports</button>
+  <button data-v="reports">Reports</button>
   <button data-v="settings">Settings</button>
 </nav>
 <main>
@@ -224,7 +224,7 @@ body.role-user .admin-only{display:none!important}
     </div>
     <div class="stats" id="st-stats" style="margin-top:1rem"></div>
     <div id="st-orphan"></div>
-    <div class="tw"><table><thead><tr><th>Item</th><th>Category</th><th>Size / variant</th><th class="num">On hand</th><th class="num">Reorder at</th><th class="num">Price</th><th class="num admin-only">Unit cost</th><th class="num admin-only">Stock value</th><th class="admin-only"></th></tr></thead><tbody id="st-body"></tbody></table></div>
+    <div class="tw"><table><thead><tr><th>Item</th><th>Category</th><th>Size / variant</th><th class="num">On hand</th><th class="num">Reorder at</th><th class="num">Price</th><th class="num">Unit cost</th><th class="num">Stock value</th><th class="admin-only"></th></tr></thead><tbody id="st-body"></tbody></table></div>
   </section>
 
   <section id="v-ledger">
@@ -247,7 +247,7 @@ body.role-user .admin-only{display:none!important}
   <section id="v-reports">
     <div class="row" style="justify-content:space-between">
       <h2 style="margin:0">Reports</h2>
-      <div class="row"><select id="rp-month" style="width:auto"></select><a class="btn" id="rp-open" target="_blank" rel="noopener" style="text-decoration:none;display:inline-flex;align-items:center">Open spreadsheet</a></div>
+      <div class="row"><select id="rp-month" style="width:auto"></select><a class="btn admin-only" id="rp-open" target="_blank" rel="noopener" style="text-decoration:none;display:inline-flex;align-items:center">Open spreadsheet</a></div>
     </div>
     <div class="stats" id="rp-stats" style="margin-top:1rem"></div>
     <div class="grid2">
@@ -406,7 +406,7 @@ function showWho(){$('#who').innerHTML='👤 '+esc(who()||S.email||'Set your nam
 function applyRole(){
   document.body.classList.toggle('role-user',!isAdmin());
   document.body.classList.toggle('role-admin',isAdmin());
-  const hidden=['ledger','reports'];
+  const hidden=['ledger'];
   if(!isAdmin()&&hidden.includes(S.view)){const b=document.querySelector('#nav button[data-v="sell"]');if(b)b.click()}
 }
 const friendly=e=>(e&&e.message?e.message:String(e)).replace(/^Exception:\s?/,'');
@@ -659,7 +659,7 @@ function renderStock(){
   $('#st-stats').innerHTML=`
     <div class="card stat"><div class="v">${act.length}</div><div class="l">Active items</div></div>
     <div class="card stat"><div class="v">${units}</div><div class="l">Units on hand</div></div>
-    <div class="card stat admin-only"><div class="v money">${money(val)}</div><div class="l">Stock value at cost</div></div>
+    <div class="card stat"><div class="v money">${money(val)}</div><div class="l">Stock value at cost</div></div>
     <div class="card stat"><div class="v money">${money(retail)}</div><div class="l">Stock value at retail</div></div>
     <div class="card stat"><div class="v ${lowN?'neg':''}">${lowN}</div><div class="l">At or below reorder level</div></div>
     <div class="card stat"><div class="v">${saleN}</div><div class="l">Items on sale</div></div>`;
@@ -668,7 +668,7 @@ function renderStock(){
     const oh=onHand(i.id),isLow=i.active!==false&&oh<=num(i.reorder);
     return `<tr class="${isLow?'low':''}" data-id="${esc(i.id)}"><td><div class="itemcell">${thumb(i,'mini')}<div><b>${esc(i.name)}</b>${i.sku?` <span class="muted">· ${esc(i.sku)}</span>`:''}${i.active===false?' <span class="tag">archived</span>':''}${i.description?`<div class="desc">${esc(i.description)}</div>`:''}</div></div></td>
     <td>${esc(i.cat)}</td><td>${esc(i.size)}</td><td class="num ${oh<0?'neg':''}"><b>${oh}</b></td><td class="num">${num(i.reorder)}</td>
-    <td class="num money">${priceHtml(i)}${isAdmin()&&isOnSale(i)&&num(i.salePrice)<num(i.cost)?'<div class="neg" style="font-size:.8rem">below cost</div>':''}</td><td class="num money admin-only">${money(num(i.cost))}</td><td class="num money admin-only">${money(Math.max(0,oh)*num(i.cost))}</td>
+    <td class="num money">${priceHtml(i)}${isOnSale(i)&&num(i.salePrice)<num(i.cost)?'<div class="neg" style="font-size:.8rem">below cost</div>':''}</td><td class="num money">${money(num(i.cost))}</td><td class="num money">${money(Math.max(0,oh)*num(i.cost))}</td>
     <td class="admin-only"><div class="row" style="flex-wrap:nowrap"><button class="btn sm" data-a="receive">Receive</button><button class="btn sm" data-a="move">Count / write-off</button><button class="btn sm" data-a="edit">Edit</button></div></td></tr>`;
   }).join(''):`<tr><td colspan="9" class="empty">${S.items.size?'No items match.':'No items yet. Tap “Add item” to start.'}</td></tr>`;
 }
