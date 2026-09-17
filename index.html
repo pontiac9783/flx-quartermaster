@@ -377,7 +377,7 @@ body.role-user .admin-only{display:none!important}
       <input id="lg-q" class="grow" type="search" placeholder="Search item, person, note…">
     </div>
     <p class="muted" style="margin:.5rem 0">Entries are never deleted. Mistakes are voided, which keeps the audit trail.</p>
-    <div class="tw"><table><thead><tr><th>Date</th><th>Type</th><th>Item</th><th class="num">Qty</th><th class="num">Amount</th><th>Payment</th><th>Recorded by</th><th>Party / note</th><th class="act"></th></tr></thead><tbody id="lg-body"></tbody></table></div>
+    <div class="tw"><table><thead><tr><th>Date</th><th>Type</th><th>Item</th><th class="num">Qty</th><th class="num">Amount</th><th>Payment</th><th>Recorded by</th><th>Party</th><th class="act"></th></tr></thead><tbody id="lg-body"></tbody></table></div>
   </section>
 
   <section id="v-reports">
@@ -2023,9 +2023,10 @@ function renderLedger(){
     const amt=e.type==='sale'||e.type==='payment'||e.type==='shipping'||e.type==='income'?e.total:(e.type==='receive'||e.type==='expense')?-e.total:null;
     const qty=e.type==='void'?'':`<span class="${e.qty>0?'pos':'neg'}">${e.qty>0?'+':''}${e.qty}</span>`;
     return `<tr class="${v?'voided':''}" data-id="${esc(e.id)}"><td>${d.toLocaleDateString()} <span class="muted">${d.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})}</span></td>
-    <td><span class="tag t-${esc(e.type)}">${TYPES[e.type]||esc(e.type)}</span></td><td>${esc(e.itemName)}</td><td class="num">${qty}</td>
+    <td><span class="tag t-${esc(e.type)}">${TYPES[e.type]||esc(e.type)}</span>${e.event&&eventName(e.event)?`<div class="muted" style="font-size:.78rem">${esc(eventName(e.event))}</div>`:''}${e.shift?'<div class="muted" style="font-size:.78rem">bar shift</div>':''}</td>
+    <td class="wrap"><b>${esc(e.itemName)}</b>${e.note?`<div class="muted" style="font-size:.82rem">${esc(e.note)}</div>`:''}</td><td class="num">${qty}</td>
     <td class="num money">${amt==null?'':`<span class="${amt>=0?'pos':'neg'}">${money(amt)}</span>`}${e.type==='sale'&&e.priceType==='sale'?' <span class="salebadge">SALE</span>':''}${e.type==='sale'&&e.priceType==='override'?' <span class="tag">override</span>':''}${isCharge(e)?' <span class="tag">on tab</span>':''}</td><td>${esc(e.pay)}</td><td>${esc(e.who)}</td>
-    <td class="wrap">${e.event&&eventName(e.event)?`<span class="evbadge" style="font-weight:600">${esc(eventName(e.event))}</span> `:''}${esc([e.party,e.note].filter(Boolean).join(' · '))}${v?' <span class="tag t-void">voided</span>':''}</td>
+    <td class="wrap">${esc(e.party||'')}${v?' <span class="tag t-void">voided</span>':''}</td>
     <td class="act"><div class="row" style="flex-wrap:nowrap;justify-content:flex-end">${e.type==='sale'&&!v&&e.sale&&firstOfSale[e.sale]===e.id&&!isCharge(e)&&!saleHasShipping(e.sale)?'<button class="btn sm" data-ship>Ship</button>':''}${(!v&&e.type!=='void')?'<button class="btn sm" data-void>Void</button>':''}</div></td></tr>`;
   }).join(''):'<tr><td colspan="9" class="empty">No entries for this selection.</td></tr>';
 }
