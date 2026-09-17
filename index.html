@@ -1876,7 +1876,9 @@ function itemModal(it){
     <div class="grow" id="f-size-wrap"><label for="f-size">Size / variant</label><input id="f-size" value="${esc(it.size||'')}" placeholder="e.g. XL, Chrome, 2026"></div></div>
     <div id="f-barbox"></div>
     <div class="row"><div class="grow"><label for="f-price" id="f-price-lbl">Sell price ($)</label><input id="f-price" type="number" step="0.01" min="0" value="${it.price!=null?it.price:''}"></div>
-    <div class="grow"><label for="f-cost" id="f-cost-lbl">Unit cost ($)</label><input id="f-cost" type="number" step="0.01" min="0" value="${num(it.pours)>0&&it.cost?r2(num(it.cost)*num(it.pours)):(it.cost!=null?it.cost:'')}"><div id="f-cost-hint" class="muted" style="font-size:.82rem"></div></div></div>
+    <div class="grow"><label for="f-cost" id="f-cost-lbl">Unit cost ($)</label>
+      <input id="f-cost" type="number" step="0.01" min="0" value="${num(it.pours)>0&&it.cost?r2(num(it.cost)*num(it.pours)):(it.cost!=null?it.cost:'')}">
+      <div id="f-cost-hint" class="muted" style="font-size:.82rem"></div></div></div>
     <div class="row"><div class="grow"><label for="f-sale">Sale price ($)</label><input id="f-sale" type="number" step="0.01" min="0" value="${num(it.salePrice)>0?it.salePrice:''}" placeholder="e.g. 5.00"></div>
     <div class="grow"><label>&nbsp;</label><label class="row" style="color:var(--ink);margin:0;min-height:44px"><input type="checkbox" id="f-onsale" style="width:auto;min-height:0" ${it.onSale?'checked':''}> On sale now</label></div></div>
     <div class="row"><div class="grow"><label for="f-ship">Shipping per unit ($)</label><input id="f-ship" type="number" step="0.01" min="0" value="${num(it.shipPrice)>0?it.shipPrice:''}" placeholder="Leave blank if not shipped"></div><div class="grow"></div></div>
@@ -1913,19 +1915,31 @@ function itemModal(it){
           <div class="grow"><label for="f-poz">Pour (oz)</label><input id="f-poz" type="number" step="0.25" min="0.25" max="6" value="${num(it.pourOz)||1.5}"></div>
           <div class="grow"><label for="f-pours">Pours per bottle</label><input id="f-pours" type="number" step="1" min="1" value="${num(it.pours)||''}"></div></div>
           <p class="muted" style="font-size:.85rem">Stock is counted in pours — receive in bottles and the app converts.</p>`:''}
+        ${btype==='whole'?`<div class="row"><div class="grow"><label for="f-pack">Pack size <span class="muted">(optional)</span></label><input id="f-pack" type="number" min="1" step="1" inputmode="numeric" placeholder="e.g. 30"></div>
+          <div class="grow"><label for="f-packcost">Price per pack ($)</label><input id="f-packcost" type="number" min="0" step="0.01" inputmode="decimal" placeholder="e.g. 25.00"></div></div>
+          <p class="muted" style="font-size:.85rem" id="f-pack-hint">Fill these in and the unit cost below is worked out for you.</p>`:''}
         ${btype==='mixed'?`<div class="row"><div class="grow"><label for="f-from">Pours from</label><select id="f-from">${liq.length?liq.map(z=>`<option value="${esc(z.id)}" ${it.poursFrom===z.id?'selected':''}>${esc(label(z))}</option>`).join(''):'<option value="">— add a spirits bottle first —</option>'}</select></div>
           <div class="grow"><label for="f-per">Pours per drink</label><input id="f-per" type="number" step="1" min="1" max="6" value="${num(it.poursPer)||1}"></div></div>`:''}`;
       costUi();
       const bs=g('f-bsize'),poz=g('f-poz'),pr=g('f-pours');
       if(bs){const calc=()=>{pr.value=Math.floor((OZ[bs.value]||0)/(num(poz.value)||1.5));costUi()};bs.onchange=calc;poz.oninput=calc;pr.oninput=costUi;if(!num(pr.value))calc()}
+      const pk=g('f-pack'),pc=g('f-packcost');
+      if(pk&&pc){
+        const packCalc=()=>{
+          const n=Math.round(num(pk.value)),c=r2(num(pc.value));
+          if(n>1&&c>0){const per=r2(c/n);g('f-cost').value=per;g('f-pack-hint').textContent=`${n} units at ${money(c)} = ${money(per)} each — unit cost set below.`}
+          else g('f-pack-hint').textContent='Fill these in and the unit cost below is worked out for you.';
+          costUi();
+        };
+        pk.oninput=packCalc;pc.oninput=packCalc;
+      }
       g('f-cost').oninput=costUi;
       md.querySelectorAll('#f-btype button').forEach(b=>b.onclick=()=>{btype=b.dataset.b;drawBar()});
     }
     const poursNow=()=>(section==='bar'&&btype==='bottle'&&g('f-pours'))?Math.round(num(g('f-pours').value)):0;
     function costUi(){
-      const n=poursNow();
-      g('f-cost-lbl').textContent=n?'Cost per bottle ($)':'Unit cost ($)';
-      const c=num(g('f-cost').value);
+      const n=poursNow(),c=num(g('f-cost').value);
+      g('f-cost-lbl').textContent=n?'Cost per bottle ($)':'Unit cost ($) — each';
       g('f-cost-hint').textContent=n&&c>0?`= ${money(r2(c/n))} per pour (${n} pours)`:'';
     }
     md.querySelector('#f-section').onclick=e=>{const b=e.target.closest('[data-s]');if(!b)return;section=b.dataset.s;drawBar();costUi()};
