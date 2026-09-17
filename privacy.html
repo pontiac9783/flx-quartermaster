@@ -1,58 +1,30 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Privacy Policy — FLX Quartermaster</title>
-<link rel="icon" type="image/png" href="favicon.png">
-<style>
-body{margin:0;background:#e9ebe8;color:#1c2125;font:16px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif}
-main{max-width:720px;margin:0 auto;padding:2rem 1.2rem 3rem}
-h1{font-size:1.8rem;margin:.2rem 0 1rem}
-h2{font-size:1.15rem;margin:1.6rem 0 .4rem}
-a{color:#8b1e1e}
-.muted{color:#5d666c}
-@media (prefers-color-scheme:dark){body{background:#14171a;color:#e6e8e6}.muted{color:#9aa3a8}a{color:#e06a64}}
-</style>
-</head>
-<body>
-<main>
-<h1>Privacy Policy</h1>
-<p class="muted">FLX Quartermaster — Punishers LEMC, Finger Lakes chapter · Last updated September 2026</p>
+// Bump VERSION whenever you upload new app files so devices pick up the update.
+const VERSION = 'qm-v45';
+const SHELL = ['./', './index.html', './config.js', './manifest.webmanifest',
+  './icon-192.png', './icon-512.png', './icon-maskable-512.png', './apple-touch-icon.png', './favicon.png'];
 
-<p>FLX Quartermaster is a private inventory, sales and member-tab tool used by authorized members of the Punishers LEMC Finger Lakes chapter. It is not offered to the general public.</p>
+self.addEventListener('install', e => {
+  e.waitUntil(caches.open(VERSION)
+    .then(c => Promise.all(SHELL.map(u => fetch(u, { cache: 'no-cache' }).then(r => r.ok && c.put(u, r)).catch(() => {}))))
+    .then(() => self.skipWaiting()));
+});
 
-<h2>Information we collect</h2>
-<ul>
-<li><b>Google account information:</b> when you sign in with Google, the app receives your name, email address and profile picture from Google. Only your email address is used, to check whether you are authorized and to record who made each entry.</li>
-<li><b>Records you create:</b> sales, stock changes, tab charges and payments, including any member names, notes, item descriptions and item pictures you enter.</li>
-<li><b>On your device:</b> the app stores your sign-in token, display name, theme and a random device ID in your browser's local storage so you stay signed in and cart holds work.</li>
-</ul>
+self.addEventListener('activate', e => {
+  e.waitUntil(caches.keys()
+    .then(keys => Promise.all(keys.filter(k => k !== VERSION).map(k => caches.delete(k))))
+    .then(() => self.clients.claim()));
+});
 
-<h2>How it is used</h2>
-<ul>
-<li>To verify you are an authorized member and to apply your role (user or admin).</li>
-<li>To keep the chapter's inventory, sales ledger, member tabs and reports.</li>
-</ul>
-<p>We do not sell, rent or share your information, use it for advertising, or access your Gmail, Drive, contacts or any other Google data.</p>
-
-<h2>Where it is stored</h2>
-<p>Records are stored in a private Google Sheet owned by the chapter Quartermaster and processed by Google Apps Script. The app itself is hosted on GitHub Pages. Google's and GitHub's own privacy policies apply to their services.</p>
-
-<h2>Who can see it</h2>
-<p>Only members authorized by the chapter can sign in. Authorized members can view inventory, tabs and reports; only chapter admins can change stock, pricing, settings and users. Ledger entries are kept as a permanent financial record.</p>
-
-<h2>Your choices</h2>
-<ul>
-<li>You can sign out at any time in <b>Settings → This device → Sign out</b>.</li>
-<li>You can remove the app's access to your Google account at <a href="https://myaccount.google.com/connections">myaccount.google.com/connections</a>.</li>
-<li>To have your access removed or ask about your information, contact the chapter Quartermaster.</li>
-</ul>
-
-<h2>Contact</h2>
-<p>Chapter Quartermaster, Punishers LEMC Finger Lakes — <a href="mailto:pontiac9783@gmail.com">pontiac9783@gmail.com</a></p>
-
-<p><a href="./">← Back to the app</a></p>
-</main>
-</body>
-</html>
+self.addEventListener('fetch', e => {
+  const url = new URL(e.request.url);
+  if (e.request.method !== 'GET' || url.origin !== self.location.origin) return; // API, Google sign-in, fonts: always network
+  // App files: always revalidate with GitHub (skip the 10-minute HTTP cache); fall back to cache when offline.
+  e.respondWith(
+    fetch(e.request.url, { cache: 'no-cache', credentials: 'same-origin' })
+      .then(res => {
+        if (res.ok) { const copy = res.clone(); caches.open(VERSION).then(c => c.put(e.request, copy)); }
+        return res;
+      })
+      .catch(() => caches.match(e.request).then(r => r || caches.match('./index.html')))
+  );
+});
