@@ -15,7 +15,8 @@ Installable web app (PWA) for Android, iPhone/iPad and PC. Free to run.
 | **Shipping** | Optional per-item shipping rate. **Add shipping** in the cart (or **Add shipping to a past sale** / Ledger → **Ship** afterwards) suggests an editable amount and ship-to. Not allowed on Club Account (tab) sales. Recorded as a separate `shipping` ledger line with the same Sale ID, kept out of revenue/profit, included in takings. One shipping line per sale (void to change). |
 | **Cart holds** | Items in a cart are held for that device so two people can't sell the same last unit. Holds renew while the app is open and expire 10 minutes after it's closed; completing or clearing the sale releases them. |
 | **Tabs** | Club Account (member tab) charges, balances, partial/full payments, per-member history. |
-| **Events** | Admins start/end an event (e.g. a rally). While running, sales, shipping, tab charges and tab payments are tagged; optional event-only prices; opening/closing cash count with over/short. Reports can be filtered by event, with an events comparison table. |
+| **Events** | Admins start/end an event (e.g. a rally) and set rider/passenger fees. While running, sales, shipping, tab charges and tab payments are tagged; optional event-only prices (devices re-price carts automatically if prices change; stale checkouts are rejected); opening/closing cash count with over/short. |
+| **Event money** | Anyone can record rider/passenger fees, 50/50 drawings (auto half payout), basket drawing tickets, cash raffle (tickets + prize), other income and out-of-pocket costs (paid from cash box, card, or personally → reimbursement list). Included in the cash box check and the event net (merch profit + income − payouts − costs). |
 | **Item details** | Tap an item name (Stock, Reports → Top sellers): picture, price/cost/margin, on hand & held, days of stock left, sales this month / 30 days / all time, profit, 12-week trend, per-size breakdown, recent activity. |
 | **Stock** | Items with category, size/variant, auto SKU, price, cost, reorder level, picture, description. Receive, physical count, loss/damage, comp. |
 | **Sale pricing** | Per item or bulk (whole product / category). Regular price is kept; ending a sale restores it. |
@@ -165,7 +166,7 @@ Send them the app link and install steps. To remove access, remove them in **Set
 |---|---|---|---|---|---|---|---|---|---|---|
 | UnitCost | Payment | RecordedBy | Party | Note | VoidsEntry | Voided | ListPrice | PriceType | OnTab | EventID |
 
-Types: `sale`, `shipping`, `receive`, `adjust`, `loss`, `comp`, `payment` (tab payment), `void`.
+Types: `sale`, `shipping`, `receive`, `adjust`, `loss`, `comp`, `payment` (tab payment), `income` / `expense` (event money; kind in `Category`: riders, passengers, fifty, basket, raffle, otherinc, payout, expense), `void`.
 Stock on hand = sum of `Qty` for non-voided entries.
 
 **Settings**
@@ -180,7 +181,7 @@ Stock on hand = sum of `Qty` for non-voided entries.
 | `D4↓` | Allowed Google emails |
 | `E4↓` | Role (`admin` / `user`) |
 
-**Events** — `EventID`, `Name`, `StartedAt`, `EndedAt`, `StartedBy`, `EndedBy`, `OpeningCash`, `ClosingCash`, `Notes`, `PricesJSON` (event price per item ID). Only one event can run at a time. Price precedence: event price → sale price → regular.
+**Events** — `EventID`, `Name`, `StartedAt`, `EndedAt`, `StartedBy`, `EndedBy`, `OpeningCash`, `ClosingCash`, `Notes`, `PricesJSON` (event price per item ID), `RiderFee`, `PassengerFee`. Only one event can run at a time. Price precedence: event price → sale price → regular.
 
 **Images** — one row per picture (`ImageID`, base64 thumbnail ≤ ~45 KB, created, uploaded by).
 
