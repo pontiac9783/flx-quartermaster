@@ -183,11 +183,12 @@ Stock on hand = sum of `Qty` for non-voided entries.
 |---|---|
 | `B1` | Club name |
 | `B2` | Chapter |
-| `A4↓` | Categories |
+| `A4↓` | Merch categories |
 | `B4↓` | Payment methods |
 | `C4↓` | Payment methods that require a member name (tabs) |
 | `D4↓` | Allowed Google emails |
-| `E4↓` | Role (`admin` / `user`) |
+| `E4↓` | Role (`admin` / `user` / `bar`) |
+| `F4↓` | Bar categories (separate list from merch) |
 
 **Events** — `EventID`, `Name`, `StartedAt`, `EndedAt`, `StartedBy`, `EndedBy`, `OpeningCash`, `ClosingCash`, `Notes`, `PricesJSON` (event price per item ID), `RiderFee`, `PassengerFee`. Only one event can run at a time. Price precedence: event price → sale price → regular.
 
