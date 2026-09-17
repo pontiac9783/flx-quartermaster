@@ -170,6 +170,11 @@ body.role-bar .bar-hide,body.role-bar .cost-col{display:none!important}
 .tile .evbadge{position:absolute;top:.9rem;left:.9rem;z-index:1}
 .tile.onevent{border-color:var(--brass)}
 .pricelist td input{width:6.5rem;min-height:36px;padding:.2rem .4rem}
+.rcv tr td{padding:.4rem .5rem}
+.rcv input{width:5.2rem;min-height:40px;padding:.2rem .4rem;text-align:right}
+.rcv .qi{width:6.6rem}
+.rcv .step{display:flex;gap:.25rem;align-items:center}
+.rcv .step button{width:34px;height:34px;border-radius:8px;border:1px solid var(--line);background:var(--surface2);cursor:pointer;font-size:1.05rem}
 .cashbox{display:grid;grid-template-columns:1fr auto;gap:.2rem .8rem;margin:.4rem 0}
 .cashbox .tot{font-weight:700;border-top:1px solid var(--line);padding-top:.2rem}
 th.act,td.act{position:sticky;right:0;z-index:1;background:var(--surface);box-shadow:-8px 0 8px -8px rgba(0,0,0,.25);text-align:right}
@@ -328,7 +333,7 @@ body.role-user .admin-only{display:none!important}
   <section id="v-stock">
     <div class="row" style="justify-content:space-between">
       <h2 style="margin:0">Stock on hand</h2>
-      <div class="row admin-only"><button class="btn" id="st-sale">Sale pricing</button><button class="btn pri" id="st-add">+ Add item</button></div>
+      <div class="row"><button class="btn pri" id="st-receive">📦 Receive</button><span class="admin-only" style="display:contents"><button class="btn" id="st-sale">Sale pricing</button><button class="btn" id="st-add">+ Add item</button></span></div>
     </div>
     <div class="row" style="margin-top:.6rem">
       <input id="st-q" class="grow" type="search" placeholder="Search name, size, SKU…">
@@ -1457,6 +1462,89 @@ function shiftModal(sh){
     };
   });
 }
+function receiveModal(preId){
+  const rows=new Map();
+  if(preId)rows.set(preId,{qty:'',cost:''});
+  const all=()=>[...S.items.values()].filter(i=>i.active!==false).sort(itemCmp);
+  const lowFirst=()=>all().filter(i=>onHand(i.id)<=num(i.reorder));
+  openModal(`<h3>Receive stock</h3>
+    <input id="rc-q" type="search" data-nodirty placeholder="Search item, size, SKU — or pick below" autocomplete="off">
+    <div id="rc-sug" class="chips" style="margin:.4rem 0 0"></div>
+    <div class="tw" style="margin-top:.6rem;max-height:42vh;overflow:auto"><table class="rcv"><thead><tr><th>Item</th><th class="num">On hand</th><th>Receiving</th><th class="num">Unit cost</th><th class="act"></th></tr></thead><tbody id="rc-body"></tbody></table></div>
+    <label for="rc-note">Note (supplier, invoice, who paid)</label><input id="rc-note" placeholder="e.g. beer run — paid by Tank">
+    <p id="rc-sum" class="muted"></p>
+    <div class="row" style="margin-top:.6rem;justify-content:flex-end"><button class="btn" data-x>Cancel</button><button class="btn pri" data-ok>Save all</button></div>`,md=>{
+    const q=md.querySelector('#rc-q'),sug=md.querySelector('#rc-sug'),body=md.querySelector('#rc-body'),sum=md.querySelector('#rc-sum');
+    const add=id=>{if(!rows.has(id))rows.set(id,{qty:'',cost:''});q.value='';draw();setTimeout(()=>{const el=body.querySelector(`tr[data-id="${id}"] .qi`);if(el){el.focus();el.select()}},20)};
+    const drawSug=()=>{
+      const s=q.value.trim().toLowerCase();
+      const pool=s?all().filter(i=>(label(i)+' '+(i.sku||'')).toLowerCase().includes(s)):lowFirst();
+      const list=pool.filter(i=>!rows.has(i.id)).slice(0,8);
+      sug.innerHTML=(s?'':'<span class="muted" style="align-self:center;margin-right:.3rem">Low stock:</span>')+
+        (list.length?list.map(i=>`<button type="button" class="chip" data-add="${esc(i.id)}">${esc(label(i))}${isPour(i)?' <span class="muted">btl</span>':''}</button>`).join(''):(s?'<span class="muted">No match</span>':'<span class="muted">nothing below reorder level</span>'));
+    };
+    const draw=()=>{
+      body.innerHTML=[...rows.keys()].map(id=>{
+        const i=S.items.get(id);if(!i)return '';
+        const r=rows.get(id),pour=isPour(i);
+        return `<tr data-id="${esc(id)}"><td class="wrap"><b>${esc(label(i))}</b>${pour?`<div class="muted" style="font-size:.8rem">bottles of ${i.pours} pours</div>`:''}</td>
+          <td class="num">${pour?`${Math.floor(Math.max(0,onHand(id))/i.pours)} btl`:onHand(id)}</td>
+          <td><div class="step"><button type="button" data-d="-1">−</button><input class="qi" type="number" min="0" step="1" inputmode="numeric" value="${r.qty}" placeholder="${pour?'btl':'qty'}"><button type="button" data-d="1">+</button></div></td>
+          <td class="num"><input class="ci" type="number" min="0" step="0.01" inputmode="decimal" value="${r.cost}" placeholder="${pour?r2(num(i.cost)*i.pours):num(i.cost)}"></td>
+          <td class="act"><button class="btn sm" data-rm>✕</button></td></tr>`;
+      }).join('')||'<tr><td colspan="5" class="empty">Search or tap a low-stock item to start.</td></tr>';
+      drawSug();tally();
+    };
+    const tally=()=>{
+      let n=0,cost=0;
+      rows.forEach((r,id)=>{const i=S.items.get(id);if(!i)return;const qty=Math.round(num(r.qty));if(qty<=0)return;
+        const per=isPour(i)?(num(r.cost)||r2(num(i.cost)*i.pours)):(num(r.cost)||num(i.cost));
+        n+=qty;cost+=qty*per});
+      sum.textContent=n?`${n} ${n===1?'unit':'units'} · ${money(r2(cost))}`:'';
+    };
+    q.addEventListener('input',drawSug);
+    q.addEventListener('keydown',e=>{if(e.key!=='Enter')return;e.preventDefault();const b=sug.querySelector('[data-add]');if(b)add(b.dataset.add)});
+    sug.addEventListener('click',e=>{const b=e.target.closest('[data-add]');if(b)add(b.dataset.add)});
+    body.addEventListener('click',e=>{
+      const tr=e.target.closest('tr[data-id]');if(!tr)return;
+      if(e.target.closest('[data-rm]')){rows.delete(tr.dataset.id);draw();return}
+      const d=e.target.closest('[data-d]');if(!d)return;
+      const inp=tr.querySelector('.qi');inp.value=Math.max(0,Math.round(num(inp.value))+ +d.dataset.d);
+      rows.get(tr.dataset.id).qty=inp.value;tally();
+    });
+    body.addEventListener('input',e=>{
+      const tr=e.target.closest('tr[data-id]');if(!tr)return;
+      const r=rows.get(tr.dataset.id);
+      if(e.target.classList.contains('qi'))r.qty=e.target.value;
+      if(e.target.classList.contains('ci'))r.cost=e.target.value;
+      tally();
+    });
+    md.querySelector('[data-x]').onclick=closeModal;
+    md.querySelector('[data-ok]').onclick=async()=>{
+      const lines=[];
+      rows.forEach((r,id)=>{
+        const i=S.items.get(id);if(!i)return;
+        const qty=Math.round(num(r.qty));if(qty<=0)return;
+        const pour=isPour(i);
+        const enteredCost=r.cost===''?'':r2(num(r.cost));
+        lines.push({id:id,qty:pour?qty*i.pours:qty,cost:enteredCost===''?'':(pour?r2(enteredCost/i.pours):enteredCost)});
+      });
+      if(!lines.length){toast('Enter how many you received');return}
+      const btn=md.querySelector('[data-ok]');btn.disabled=true;btn.textContent='Saving…';
+      try{
+        const res=await call('receiveBatch',{name:who(),lines,note:md.querySelector('#rc-note').value.trim()});
+        if(res.items)S.items=new Map(res.items.map(i=>[i.id,i]));
+        S.entries=S.entries.concat(res.added||[]).sort((a,b)=>b.ts-a.ts);
+        recomputeStock();closeModal();refresh();
+        const units=lines.reduce((s,l)=>s+l.qty,0);
+        toast(`Received ${lines.length} item${lines.length===1?'':'s'}`);
+      }catch(err){toast('Not saved: '+friendly(err),5000);btn.disabled=false;btn.textContent='Save all'}
+    };
+    draw();
+  });
+  $('#md').style.maxWidth='720px';
+}
+$('#st-receive').onclick=()=>receiveModal();
 function renderStock(){
   const sel=$('#st-cat'),cur=sel.value;
   const orph=new Map([...orphanCats('merch'),...orphanCats('bar')]);
@@ -1522,7 +1610,7 @@ $('#st-body').addEventListener('click',e=>{
   if($('#rowmenu').classList.contains('on')&&$('#rowmenu').dataset.for===it.id){closeRowMenu();return}
   $('#rowmenu').dataset.for=it.id;
   openRowMenu(b,[
-    {label:'Receive stock',run:()=>moveModal(it,'receive')},
+    {label:'Receive stock',run:()=>receiveModal(it.id)},
     {label:'Physical count',run:()=>moveModal(it,'adjust')},
     {label:'Loss / damage',run:()=>moveModal(it,'loss')},
     {label:'Comp / give-away',run:()=>moveModal(it,'comp')},
