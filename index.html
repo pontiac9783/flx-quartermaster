@@ -1348,7 +1348,7 @@ function renderBar(){
   const list=barItems().filter(i=>!S.bar.cat||catKey(i.cat)===catKey(S.bar.cat)).sort(itemCmp);
   $('#bar-grid').innerHTML=list.map(i=>{
     const l=levelText(i);
-    return `<button class="drink ${l.n<=0?'dim':''}" data-id="${esc(i.id)}"><span class="drow"><span class="muted" style="font-size:.72rem">${esc(i.cat||'')}</span><span class="lvl ${l.n<=0?'out':l.low?'low':''}">${esc(l.txt)}</span></span><b>${esc(i.name)}</b>${i.size?`<span class="muted" style="font-size:.85rem">${esc(i.size)}</span>`:''}<span class="amt">${money(barPrice(i))}</span></button>`;
+    return `<button class="drink ${l.n<=0?'dim':''}" data-id="${esc(i.id)}">${l.n<=0?'<span class="drow"><span></span><span class="lvl out">out</span></span>':''}<b>${esc(i.name)}</b>${i.size?`<span class="muted" style="font-size:.85rem">${esc(i.size)}</span>`:''}<span class="amt">${money(barPrice(i))}</span></button>`;
   }).join('')+`<button class="drink quick" data-quick><b>+ Quick item</b><span class="muted" style="font-size:.85rem">name &amp; amount</span></button>`;
   renderRound();
 }
