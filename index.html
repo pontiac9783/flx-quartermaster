@@ -138,6 +138,28 @@ img.thumb.zoomable,#f-pic img{cursor:zoom-in}
 .spark{width:100%;height:58px;display:block;margin-top:.3rem}
 .spark rect{fill:var(--accent);opacity:.8}
 .spark text{fill:var(--muted);font-size:9px}
+#barbar{display:none;align-items:center;gap:.6rem;justify-content:space-between;flex-wrap:wrap;padding:.45rem 1rem;font-size:.92rem;border-bottom:1px solid var(--line);background:color-mix(in srgb,var(--brass) 18%,var(--surface))}
+#barbar.on{display:flex}
+.bargrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:.55rem;margin-top:.7rem}
+.drink{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:.7rem .6rem;min-height:92px;display:flex;flex-direction:column;gap:.15rem;text-align:left;cursor:pointer;position:relative;-webkit-tap-highlight-color:transparent}
+.drink:active{transform:scale(.97);background:var(--surface2)}
+.drink b{font-size:1rem;line-height:1.15}
+.drink .amt{margin-top:auto;font-family:"Barlow Condensed",sans-serif;font-size:1.5rem;font-weight:700;color:var(--brass)}
+.drink .lvl{position:absolute;top:.45rem;right:.5rem;font-size:.72rem;color:var(--muted)}
+.drink .lvl.low{color:var(--warn);font-weight:600}
+.drink .lvl.out{color:var(--bad);font-weight:700}
+.drink.dim{opacity:.5}
+.drink.quick{border-style:dashed;align-items:center;justify-content:center;text-align:center;color:var(--muted)}
+.barhead{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center}
+.barhead .seg{width:auto}
+.barhead .seg button{padding:.5rem .9rem;min-height:44px}
+#bar-last{display:flex;gap:.4rem;flex-wrap:wrap;margin-top:.7rem;min-height:2rem}
+.lastchip{display:inline-flex;align-items:center;gap:.4rem;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:.25rem .5rem .25rem .7rem;font-size:.88rem}
+.lastchip.pend{border-style:dashed;color:var(--muted)}
+.lastchip button{border:0;background:var(--surface2);border-radius:50%;width:24px;height:24px;cursor:pointer;line-height:1;color:var(--ink)}
+.bartotals{display:flex;gap:1.2rem;flex-wrap:wrap;align-items:baseline;margin-top:.4rem}
+.bartotals .v{font-family:"Barlow Condensed",sans-serif;font-size:1.7rem;font-weight:700}
+body.role-bar .bar-hide,body.role-bar .cost-col{display:none!important}
 #evbar{display:none;align-items:center;gap:.6rem;justify-content:space-between;flex-wrap:wrap;padding:.45rem 1rem;font-size:.92rem;border-bottom:1px solid var(--line)}
 #evbar.on{display:flex}
 #evbar.live{background:color-mix(in srgb,var(--ok) 16%,var(--surface));}
@@ -234,8 +256,10 @@ body.role-user .admin-only{display:none!important}
   <p id="si-msg" class="muted"></p>
 </div></div>
 <div id="evbar"></div>
+<div id="barbar"></div>
 <nav id="nav">
   <button data-v="sell" class="on">Sell</button>
+  <button data-v="bar">Bar</button>
   <button data-v="tabs">Tabs</button>
   <button data-v="stock">Stock</button>
   <button data-v="ledger" class="admin-only">Ledger</button>
@@ -277,6 +301,20 @@ body.role-user .admin-only{display:none!important}
     <div class="cartbar" id="cartbar" style="display:none"><span id="cb-txt"></span><button class="btn pri" id="cb-go">Review sale</button></div>
   </section>
 
+  <section id="v-bar">
+    <div class="barhead">
+      <div class="seg" id="bar-who"><button data-w="member" class="on">Member</button><button data-w="guest">Guest</button></div>
+      <button class="btn" id="bar-tab">Walk-up</button>
+      <button class="btn" id="bar-comp">Comp: off</button>
+      <div class="grow"></div>
+      <div class="bartotals"><span><span class="v money" id="bar-total">$0.00</span> <span class="muted" id="bar-count">0 drinks</span></span></div>
+    </div>
+    <div class="chips" id="bar-cats"></div>
+    <div class="bargrid" id="bar-grid"></div>
+    <div id="bar-last"></div>
+    <div class="pad-bottom"></div>
+  </section>
+
   <section id="v-tabs">
     <h2>Member tabs</h2>
     <div class="stats" id="tb-stats"></div>
@@ -296,12 +334,13 @@ body.role-user .admin-only{display:none!important}
       <input id="st-q" class="grow" type="search" placeholder="Search name, size, SKU…">
       <select id="st-cat" style="width:auto"></select>
       <label class="row" style="margin:0;color:var(--ink)"><input type="checkbox" id="st-low" style="width:auto;min-height:0"> Low stock only</label>
+      <select id="st-section" style="width:auto"><option value="">Merch &amp; bar</option><option value="merch">Merch only</option><option value="bar">Bar only</option></select>
       <label class="row" style="margin:0;color:var(--ink)"><input type="checkbox" id="st-sale-only" style="width:auto;min-height:0"> On sale only</label>
       <label class="row" style="margin:0;color:var(--ink)"><input type="checkbox" id="st-arch" style="width:auto;min-height:0"> Show archived</label>
     </div>
     <div class="stats" id="st-stats" style="margin-top:1rem"></div>
     <div id="st-orphan"></div>
-    <div class="tw"><table><thead><tr><th>Item</th><th>Category</th><th>Size / variant</th><th class="num">On hand</th><th class="num">Reorder at</th><th class="num">Price</th><th class="num">Unit cost</th><th class="num">Stock value</th><th class="admin-only act"></th></tr></thead><tbody id="st-body"></tbody></table></div>
+    <div class="tw"><table><thead><tr><th>Item</th><th>Category</th><th>Size / variant</th><th class="num">On hand</th><th class="num">Reorder at</th><th class="num">Price</th><th class="num cost-col">Unit cost</th><th class="num cost-col">Stock value</th><th class="admin-only act"></th></tr></thead><tbody id="st-body"></tbody></table></div>
   </section>
 
   <section id="v-ledger">
@@ -332,6 +371,7 @@ body.role-user .admin-only{display:none!important}
       <div class="card"><h3>Takings by payment method</h3><div class="tw"><table><thead><tr><th>Method</th><th class="num">Sales</th><th class="num">Amount</th><th class="num">Shipping</th><th class="num">Tab payments in</th></tr></thead><tbody id="rp-pay"></tbody></table></div></div>
       <div class="card"><h3>Top sellers</h3><div class="tw"><table><thead><tr><th>Item</th><th class="num">Units</th><th class="num">Revenue</th><th class="num">Profit</th></tr></thead><tbody id="rp-top"></tbody></table></div></div>
       <div class="card"><h3>Needs reordering</h3><div class="tw"><table><thead><tr><th>Item</th><th class="num">On hand</th><th class="num">Reorder at</th></tr></thead><tbody id="rp-low"></tbody></table></div></div>
+      <div class="card"><h3>Bar shifts</h3><div class="tw"><table><thead><tr><th>Shift</th><th class="num">Drinks</th><th class="num">Donations</th><th class="num">Cash +/-</th></tr></thead><tbody id="rp-shifts"></tbody></table></div></div>
       <div class="card"><h3>Events</h3><div class="tw"><table><thead><tr><th>Event</th><th class="num">Sales</th><th class="num">Revenue</th><th class="num">Event net</th><th class="num">Cash +/-</th></tr></thead><tbody id="rp-events"></tbody></table></div></div>
       <div class="card"><h3>Sales by price type</h3><div class="tw"><table><thead><tr><th>Price</th><th class="num">Units</th><th class="num">Revenue</th><th class="num">Discount given</th></tr></thead><tbody id="rp-ptype"></tbody></table></div></div>
       <div class="card"><h3>Shrinkage &amp; comps</h3><div class="tw"><table><thead><tr><th>Type</th><th class="num">Units</th><th class="num">Cost value</th></tr></thead><tbody id="rp-shrink"></tbody></table></div></div>
@@ -360,7 +400,7 @@ body.role-user .admin-only{display:none!important}
         <h3>Users</h3>
         <p class="muted" style="margin-top:0">Admins manage stock, pricing, ledger, reports and settings. Users can sell, view stock and handle tabs.</p>
         <div class="tw"><table><thead><tr><th>Google email</th><th>Role</th><th class="act"></th></tr></thead><tbody id="se-users"></tbody></table></div>
-        <div class="row" style="margin-top:.6rem"><input id="se-newuser" class="grow" type="email" placeholder="member@gmail.com" autocomplete="off"><select id="se-newrole" style="width:auto"><option value="user">User</option><option value="admin">Admin</option></select><button class="btn" id="se-adduser">Add</button></div>
+        <div class="row" style="margin-top:.6rem"><input id="se-newuser" class="grow" type="email" placeholder="member@gmail.com" autocomplete="off"><select id="se-newrole" style="width:auto"><option value="user">User</option><option value="bar">Bar tablet</option><option value="admin">Admin</option></select><button class="btn" id="se-adduser">Add</button></div>
         <p class="muted" style="font-size:.85rem">New people must also be added in Google Cloud → Audience → Test users before they can sign in.</p>
       </div>
       <div class="card">
@@ -468,7 +508,7 @@ async function callNow(fn,arg){
 const S={
   items:new Map(),entries:[],stock:{},voided:new Set(),email:'',url:'#',
   settings:{club:'Quartermaster',cats:[],pays:[]},
-  images:new Map(),held:{},events:[],activeEvent:null,pending:0,pendDec:{},ship:{on:false,manual:false},users:[],role:'',owner:'',imgPending:new Set(),cart:new Map(),pay:null,cat:'',view:'sell',busy:false,loaded:false
+  images:new Map(),held:{},events:[],activeEvent:null,shifts:[],shift:null,tmp:[],bar:{guest:false,comp:false,party:'',cat:'',queue:[],flushT:0,sending:false},pending:0,pendDec:{},ship:{on:false,manual:false},users:[],role:'',owner:'',imgPending:new Set(),cart:new Map(),pay:null,cat:'',view:'sell',busy:false,loaded:false
 };
 const TYPES={sale:'Sale',shipping:'Shipping',payment:'Tab payment',income:'Event income',expense:'Cost / payout',receive:'Received',adjust:'Count adj.',loss:'Loss / damage',comp:'Comp / give-away',void:'Void'};
 
@@ -512,9 +552,15 @@ function applyTheme(){const t=store('qm_theme')||'';if(t)document.documentElemen
 const isAdmin=()=>S.role==='admin';
 function showWho(){$('#who').innerHTML='👤 '+esc(who()||S.email||'Set your name')+(isAdmin()?'<span class="rolechip">ADMIN</span>':'')}
 function applyRole(){
+  document.body.classList.toggle('role-bar',S.role==='bar');
+  document.querySelectorAll('#nav button[data-v]').forEach(b=>{
+    const v=b.dataset.v;
+    const hide=S.role==='bar'?(v==='sell'||v==='ledger'||v==='reports'):(v==='ledger'&&!isAdmin());
+    b.style.display=hide?'none':'';
+  });
   document.body.classList.toggle('role-user',!isAdmin());
   document.body.classList.toggle('role-admin',isAdmin());
-  const hidden=['ledger'];
+  const hidden=S.role==='bar'?['sell','ledger','reports']:['ledger'];
   if(!isAdmin()&&hidden.includes(S.view)){const b=document.querySelector('#nav button[data-v="sell"]');if(b)b.click()}
 }
 const friendly=e=>(e&&e.message?e.message:String(e)).replace(/^Exception:\s?/,'');
@@ -522,12 +568,12 @@ applyTheme();
 
 function apply(d){
   S.items=new Map(d.items.map(i=>[i.id,i]));
-  S.entries=d.entries.slice().sort((a,b)=>b.ts-a.ts);
+  S.entries=d.entries.concat(S.tmp).sort((a,b)=>b.ts-a.ts);
   S.voided=new Set(S.entries.filter(e=>e.voided).map(e=>e.id));
   const st={};
   for(const e of S.entries){if(e.type==='void'||e.voided)continue;st[e.itemId]=(st[e.itemId]||0)+num(e.qty)}
   for(const id in S.pendDec)st[id]=(st[id]||0)-S.pendDec[id];
-  S.stock=st;S.settings=d.settings;S.loaded=true;S.email=d.email||'';S.url=d.url||'#';S.held=d.held||{};S.events=d.events||[];S.activeEvent=S.events.find(e=>!e.endedAt)||null;S.role=d.role||'user';S.users=d.users||[];S.owner=d.owner||'';applyRole();
+  S.stock=st;S.settings=d.settings;S.loaded=true;S.email=d.email||'';S.url=d.url||'#';S.held=d.held||{};S.events=d.events||[];S.activeEvent=S.events.find(e=>!e.endedAt)||null;S.shifts=d.shifts||[];S.shift=S.shifts.find(x=>!x.closedAt)||null;S.role=d.role||'user';S.users=d.users||[];S.owner=d.owner||'';applyRole();
   $('#lg-open').href=S.url;$('#rp-open').href=S.url;
   banner('');showWho();refresh();ensureImages();
 }
@@ -748,11 +794,13 @@ $('#nav').addEventListener('click',e=>{
 
 function activeItems(){return [...S.items.values()].filter(i=>i.active!==false).sort(itemCmp)}
 function renderSell(){
-  const cats=['',...S.settings.cats];
+  const barCats=new Set(barItems().map(i=>catKey(i.cat)));
+  const merchCats=new Set(activeItems().filter(i=>i.section!=='bar').map(i=>catKey(i.cat)));
+  const cats=['',...S.settings.cats.filter(c=>!barCats.has(catKey(c))||merchCats.has(catKey(c)))];
   $('#s-cats').innerHTML=cats.map(c=>`<button class="chip ${S.cat===c?'on':''}" data-c="${esc(c)}">${c?esc(c):'All'}</button>`).join('');
   const q=$('#s-q').value.trim().toLowerCase();
   const oos=$('#s-oos').checked;
-  const base=activeItems().filter(i=>(!S.cat||catKey(i.cat)===catKey(S.cat))&&(!q||(label(i)+' '+(i.sku||'')).toLowerCase().includes(q)));
+  const base=activeItems().filter(i=>i.section!=='bar'&&(!S.cat||catKey(i.cat)===catKey(S.cat))&&(!q||(label(i)+' '+(i.sku||'')).toLowerCase().includes(q)));
   const list=oos?base:base.filter(i=>onHand(i.id)>0||S.cart.has(i.id));
   const hidden=base.length-list.length;
   $('#s-tiles').innerHTML=list.length?list.map(i=>{
@@ -991,8 +1039,9 @@ async function syncCart(){
   finally{syncing=false;if(syncAgain){syncAgain=false;syncCartSoon()}}
 }
 setInterval(()=>{if(S.cart.size&&!document.hidden)syncCart()},60000);
-document.addEventListener('visibilitychange',()=>{if(!document.hidden&&S.cart.size)syncCart()});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&S.cart.size)syncCart();if(S.bar.queue.length)flushBar()});
 window.addEventListener('pagehide',()=>{
+  if(S.bar.queue.length)flushBar();
   if(!S.cart.size||!tokenValid()||!navigator.sendBeacon||!CFG.API_URL)return;
   try{navigator.sendBeacon(CFG.API_URL,new Blob([JSON.stringify({fn:'syncCart',arg:{lines:[]},idToken:AUTH.token,session:SESSION})],{type:'text/plain;charset=utf-8'}))}catch(e){}
 });
@@ -1012,7 +1061,7 @@ function renderEvBar(){
 }
 function priceListHtml(prices){
   const groups=new Map();
-  for(const i of activeItems()){const k=catKey(i.name);if(!groups.has(k))groups.set(k,[]);groups.get(k).push(i)}
+  for(const i of activeItems().filter(i=>i.section!=='bar')){const k=catKey(i.name);if(!groups.has(k))groups.set(k,[]);groups.get(k).push(i)}
   const rows=[...groups.values()].sort((a,b)=>a[0].name.localeCompare(b[0].name)).map(g=>{
     const reg=[...new Set(g.map(i=>num(i.price)))],cur=[...new Set(g.map(i=>num(prices[i.id])||0))];
     const val=cur.length===1&&cur[0]>0?cur[0].toFixed(2):'';
@@ -1178,6 +1227,234 @@ function eventModal(ev){
   });
   $('#md').style.maxWidth='640px';
 }
+/* ---------------- bar ---------------- */
+const barItems=()=>[...S.items.values()].filter(i=>i.section==='bar'&&i.active!==false);
+const isPour=i=>!!(i&&i.pours>0);
+function stockTargetId(i){return (i.poursFrom&&S.items.has(i.poursFrom))?i.poursFrom:i.id}
+function barPrice(i){return S.bar.guest&&num(i.guestPrice)>0?num(i.guestPrice):effPrice(i)}
+function levelText(i){
+  const tid=stockTargetId(i),tgt=S.items.get(tid)||i,n=onHand(tid);
+  if(isPour(tgt)){const b=Math.floor(Math.max(0,n)/tgt.pours),rem=Math.max(0,n)%tgt.pours;return {n,txt:n<=0?'empty':`${b?b+' btl ':''}${rem} pour${rem===1?'':'s'}`,low:n<=(num(tgt.reorder)||tgt.pours)}}
+  return {n,txt:n<=0?'out':`${n} left`,low:n<=num(tgt.reorder)};
+}
+function barShiftEntries(){return S.shift?live().filter(e=>e.shift===S.shift.id):[]}
+function renderBarBar(){
+  const bar=$('#barbar');
+  if(!S.loaded||S.role==='' ){bar.className='';return}
+  if(S.shift){
+    const es=barShiftEntries(),tot=es.filter(e=>e.type==='sale').reduce((s,e)=>s+num(e.total),0);
+    bar.className='on';
+    bar.innerHTML=`<span><b>🍻 Bar open</b> <span class="muted">· ${esc(S.shift.bartender)} · since ${new Date(S.shift.openedAt).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})}${S.shift.event?' · '+esc(eventName(S.shift.event)):''} · ${money(tot)}</span></span><button class="btn sm" id="bar-close">Close bar</button>`;
+    $('#bar-close').onclick=()=>shiftModal(S.shift);
+  }else if(S.view==='bar'){
+    bar.className='on';
+    bar.innerHTML='<span class="muted">Bar closed — drinks aren’t counted on a shift</span><button class="btn sm" id="bar-open">Open bar</button>';
+    $('#bar-open').onclick=()=>shiftModal(null);
+  }else bar.className='';
+}
+function renderBar(){
+  const cats=[...new Set(barItems().map(i=>i.cat).filter(Boolean))];
+  if(S.bar.cat&&!cats.includes(S.bar.cat))S.bar.cat='';
+  $('#bar-cats').innerHTML=['',...cats].map(c=>`<button class="chip ${S.bar.cat===c?'on':''}" data-c="${esc(c)}">${c?esc(c):'All'}</button>`).join('');
+  $('#bar-who').querySelectorAll('button').forEach(b=>b.classList.toggle('on',(b.dataset.w==='guest')===S.bar.guest));
+  $('#bar-tab').textContent=S.bar.party?`Tab: ${S.bar.party}`:'Walk-up';
+  $('#bar-tab').classList.toggle('pri',!!S.bar.party);
+  $('#bar-comp').textContent=S.bar.comp?'Comp: ON':'Comp: off';
+  $('#bar-comp').classList.toggle('pri',S.bar.comp);
+  const list=barItems().filter(i=>!S.bar.cat||i.cat===S.bar.cat).sort(itemCmp);
+  $('#bar-grid').innerHTML=list.map(i=>{
+    const l=levelText(i);
+    return `<button class="drink ${l.n<=0?'dim':''}" data-id="${esc(i.id)}"><span class="lvl ${l.n<=0?'out':l.low?'low':''}">${esc(l.txt)}</span><b>${esc(i.name)}</b><span class="muted" style="font-size:.85rem">${esc(i.size||i.cat||'')}</span><span class="amt">${money(barPrice(i))}</span></button>`;
+  }).join('')+`<button class="drink quick" data-quick><b>+ Quick item</b><span class="muted" style="font-size:.85rem">name &amp; amount</span></button>`;
+  renderBarTotals();
+}
+function renderBarTotals(){
+  const es=barShiftEntries();
+  const sales=es.filter(e=>e.type==='sale'),drinks=es.filter(e=>e.type==='sale'||e.type==='comp');
+  const tot=sales.reduce((s,e)=>s+num(e.total),0);
+  $('#bar-total').textContent=money(tot);
+  const n=drinks.length;
+  $('#bar-count').textContent=`${n} drink${n===1?'':'s'}${S.bar.party?` · tab ${esc(S.bar.party)}`:''}`;
+  const last=es.slice(0,10);
+  $('#bar-last').innerHTML=last.map(e=>`<span class="lastchip ${e.pending?'pend':''}"><span>${esc(e.itemName)}${e.type==='comp'?' (comp)':''} ${e.type==='comp'?'':money(num(e.total))}</span><button data-undo="${esc(e.id)}" title="Remove" aria-label="Remove">✕</button></span>`).join('');
+  renderBarBar();
+}
+function barTap(i,opts){
+  opts=opts||{};
+  const comp=S.bar.comp,tid=stockTargetId(i);
+  const per=(i.poursFrom&&S.items.has(i.poursFrom))?Math.max(1,i.poursPer||1):1;
+  const price=comp?0:(opts.price!=null?opts.price:barPrice(i));
+  const pay=S.bar.party?(S.settings.memberPays[0]||'Club Account'):(S.settings.pays.find(p=>p.trim().toLowerCase()==='cash')||S.settings.pays[0]||'Cash');
+  const e={id:'tmp'+Math.random().toString(36).slice(2,9),ts:Date.now(),type:comp?'comp':'sale',
+    itemId:opts.quick?'':tid,itemName:opts.quick?opts.quick.name:label(i),cat:opts.quick?(opts.quick.cat||'Bar'):i.cat,
+    qty:opts.quick?-1:-per,unit:price,total:r2(price),cost:0,pay:comp?'':pay,who:who(),party:S.bar.party,
+    note:comp?(opts.reason||'comp'):'',section:'bar',shift:S.shift?S.shift.id:'',onTab:!comp&&!!S.bar.party,
+    priceType:comp?'comp':(S.bar.guest?'guest':'member'),pending:true};
+  S.tmp.push(e);S.entries.unshift(e);
+  if(e.itemId)S.stock[e.itemId]=(S.stock[e.itemId]||0)+e.qty;
+  S.bar.queue.push({tmpId:e.id,line:opts.quick?{quick:opts.quick,qty:1,price:price,comp:comp,reason:e.note}:{id:i.id,qty:1,price:price,comp:comp,reason:e.note},
+    pay:e.pay,party:e.party,guest:S.bar.guest});
+  renderBarTotals();
+  const row=$('#bar-grid').querySelector(`[data-id="${e.itemId||'__'}"]`);
+  if(row&&!opts.quick){const l=levelText(i),sp=row.querySelector('.lvl');sp.textContent=l.txt;sp.className='lvl '+(l.n<=0?'out':l.low?'low':'');row.classList.toggle('dim',l.n<=0)}
+  scheduleBarFlush(S.bar.queue.length>=6?0:2000);
+}
+function scheduleBarFlush(ms){clearTimeout(S.bar.flushT);S.bar.flushT=setTimeout(flushBar,ms)}
+async function flushBar(){
+  if(S.bar.sending||!S.bar.queue.length)return;
+  if(!navigator.onLine||!tokenValid()){scheduleBarFlush(4000);return}
+  const first=S.bar.queue[0];
+  const batch=[];
+  while(S.bar.queue.length&&batch.length<25){
+    const q=S.bar.queue[0];
+    if(q.pay!==first.pay||q.party!==first.party||q.guest!==first.guest)break;
+    batch.push(S.bar.queue.shift());
+  }
+  S.bar.sending=true;
+  try{
+    const res=await call('recordBarDrinks',{name:who(),pay:first.pay,party:first.party,guest:first.guest,lines:batch.map(b=>b.line)});
+    const ids=new Set(batch.map(b=>b.tmpId));
+    S.tmp=S.tmp.filter(e=>!ids.has(e.id));
+    S.entries=S.entries.filter(e=>!ids.has(e.id)).concat(res.added||[]).sort((a,b)=>b.ts-a.ts);
+    recomputeStock();
+    if(S.view==='bar')renderBar();
+  }catch(err){
+    batch.reverse().forEach(b=>S.bar.queue.unshift(b));
+    toast('Bar not saved yet: '+friendly(err)+' — will retry',5000);
+    scheduleBarFlush(6000);
+  }finally{
+    S.bar.sending=false;
+    if(S.bar.queue.length)scheduleBarFlush(600);
+  }
+}
+function recomputeStock(){
+  const st={};
+  for(const e of S.entries){if(e.type==='void'||S.voided.has(e.id))continue;st[e.itemId]=(st[e.itemId]||0)+num(e.qty)}
+  for(const id in S.pendDec)st[id]=(st[id]||0)-S.pendDec[id];
+  S.stock=st;
+}
+async function barUndo(id){
+  const qi=S.bar.queue.findIndex(q=>q.tmpId===id);
+  if(qi>=0){
+    S.bar.queue.splice(qi,1);
+    S.tmp=S.tmp.filter(e=>e.id!==id);
+    S.entries=S.entries.filter(e=>e.id!==id);
+    recomputeStock();renderBar();toast('Removed');return;
+  }
+  const e=S.entries.find(x=>x.id===id);if(!e)return;
+  const keep=S.entries;
+  S.voided.add(id);recomputeStock();renderBar();
+  try{await call('voidLight',{name:who(),id:id,reason:'removed at the bar'});toast('Removed')}
+  catch(err){S.voided.delete(id);S.entries=keep;recomputeStock();renderBar();toast('Could not remove: '+friendly(err),5000)}
+}
+$('#bar-who').addEventListener('click',e=>{const b=e.target.closest('[data-w]');if(!b)return;S.bar.guest=b.dataset.w==='guest';renderBar()});
+$('#bar-cats').addEventListener('click',e=>{const b=e.target.closest('[data-c]');if(!b)return;S.bar.cat=b.dataset.c;renderBar()});
+$('#bar-comp').onclick=()=>{S.bar.comp=!S.bar.comp;renderBar();if(S.bar.comp)toast('Comp mode — next taps are free',3000)};
+$('#bar-tab').onclick=()=>barTabModal();
+$('#bar-grid').addEventListener('click',e=>{
+  const q=e.target.closest('[data-quick]');
+  if(q){quickItemModal();return}
+  const b=e.target.closest('.drink[data-id]');if(!b)return;
+  const it=S.items.get(b.dataset.id);if(!it)return;
+  if(!S.shift&&!confirm('The bar isn’t open. Record drinks anyway?'))return;
+  if(S.bar.comp&&!S.bar.compReason){compReasonModal(it);return}
+  barTap(it,S.bar.comp?{reason:S.bar.compReason}:{});
+});
+$('#bar-last').addEventListener('click',e=>{const b=e.target.closest('[data-undo]');if(b)barUndo(b.dataset.undo)});
+function barTabModal(){
+  const names=memberNames();
+  openModal(`<h3>Who's the tab for?</h3>
+    <label for="bt-name">Member</label><input id="bt-name" list="c-members" value="${esc(S.bar.party)}" placeholder="Name — leave blank for walk-up">
+    <p class="muted" style="font-size:.85rem">Taps go on this member's tab (${esc(S.settings.memberPays[0]||'Club Account')}) until you clear it.</p>
+    <div class="row" style="margin-top:1rem;justify-content:flex-end"><button class="btn" data-clear>Walk-up (cash)</button><button class="btn" data-x>Cancel</button><button class="btn pri" data-ok>Start tab</button></div>`,md=>{
+    md.querySelector('[data-x]').onclick=closeModal;
+    md.querySelector('[data-clear]').onclick=()=>{S.bar.party='';closeModal();renderBar()};
+    md.querySelector('[data-ok]').onclick=()=>{
+      const v=md.querySelector('#bt-name').value.trim();
+      if(!v){toast('Enter a member name or choose Walk-up');return}
+      S.bar.party=v;closeModal();renderBar();toast(`Tab: ${v}`);
+    };
+  });
+}
+function compReasonModal(it){
+  const picks=['Worker','Band','Prospect','Spill','Officer','Guest of club'];
+  openModal(`<h3>Comp reason</h3><div class="chips">${picks.map(p=>`<button class="chip" data-p="${esc(p)}">${esc(p)}</button>`).join('')}</div>
+    <label for="cr-o">Other</label><input id="cr-o" placeholder="Reason">
+    <p class="muted" style="font-size:.85rem">Kept for the rest of comp mode. Turn comp off when you're done.</p>
+    <div class="row" style="margin-top:1rem;justify-content:flex-end"><button class="btn" data-x>Cancel</button><button class="btn pri" data-ok>Use reason</button></div>`,md=>{
+    const go=v=>{S.bar.compReason=v;closeModal();barTap(it,{reason:v})};
+    md.querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>go(b.dataset.p));
+    md.querySelector('[data-x]').onclick=closeModal;
+    md.querySelector('[data-ok]').onclick=()=>{const v=md.querySelector('#cr-o').value.trim();if(!v){toast('Pick or type a reason');return}go(v)};
+  });
+}
+function quickItemModal(){
+  openModal(`<h3>Quick item</h3>
+    <label for="qi-n">Name</label><input id="qi-n" placeholder="e.g. Jello shot">
+    <label for="qi-a">Donation ($)</label><input id="qi-a" type="number" step="0.25" min="0" inputmode="decimal">
+    <p class="muted" style="font-size:.85rem">Recorded as a bar donation. No stock is deducted.</p>
+    <div class="row" style="margin-top:1rem;justify-content:flex-end"><button class="btn" data-x>Cancel</button><button class="btn pri" data-ok>Add</button></div>`,md=>{
+    md.querySelector('[data-x]').onclick=closeModal;
+    md.querySelector('[data-ok]').onclick=()=>{
+      const n=md.querySelector('#qi-n').value.trim(),a=r2(num(md.querySelector('#qi-a').value));
+      if(!n||!(a>0)&&!S.bar.comp){toast('Enter a name and amount');return}
+      closeModal();barTap(null,{quick:{name:n,cat:'Specials'},price:a,reason:S.bar.compReason});
+    };
+  });
+}
+function shiftModal(sh){
+  const open=!sh;
+  const es=sh?live().filter(e=>e.shift===sh.id):[];
+  const sales=es.filter(e=>e.type==='sale');
+  const cashName=(S.settings.pays||[]).find(p=>p.trim().toLowerCase()==='cash')||'';
+  const cash=sales.filter(e=>e.pay===cashName).reduce((s,e)=>s+num(e.total),0);
+  const tabs=sales.filter(e=>e.onTab).reduce((s,e)=>s+num(e.total),0);
+  const other=sales.reduce((s,e)=>s+num(e.total),0)-cash-tabs;
+  const comps=es.filter(e=>e.type==='comp').length;
+  const opening=sh&&sh.openingCash!=null?num(sh.openingCash):0;
+  const expected=r2(opening+cash);
+  const ev=S.activeEvent;
+  openModal(`<h3>${open?'Open bar':'Close bar'}</h3>
+    ${open?`<label for="sh-b">Who's behind the bar?</label><input id="sh-b" list="c-members" value="${esc(who())}">
+      <label for="sh-o">Starting cash in the bar box ($)</label><input id="sh-o" type="number" step="0.01" min="0" inputmode="decimal" placeholder="Optional">
+      ${ev?`<label class="row" style="color:var(--ink);margin-top:.8rem"><input type="checkbox" id="sh-ev" style="width:auto;min-height:0" checked> Count this shift toward <b>&nbsp;${esc(ev.name)}</b></label>`:''}`
+    :`<p class="muted" style="margin-top:0">${esc(sh.bartender)} · opened ${new Date(sh.openedAt).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})}${sh.event?' · '+esc(eventName(sh.event)):''}</p>
+      <div class="cashbox">
+        <span>Opening cash</span><span class="money">${sh.openingCash==null?'—':money(opening)}</span>
+        <span>+ Cash donations</span><span class="money">${money(cash)}</span>
+        <span class="tot">Expected in bar box</span><span class="tot money">${money(expected)}</span>
+        <span>On tabs</span><span class="money">${money(tabs)}</span>
+        ${other?`<span>Other methods</span><span class="money">${money(other)}</span>`:''}
+        <span>Drinks poured</span><span>${sales.length}${comps?` · ${comps} comp`:''}</span>
+      </div>
+      <label for="sh-c">Counted cash ($)</label><input id="sh-c" type="number" step="0.01" min="0" inputmode="decimal">
+      <div id="sh-diff" class="muted" style="margin-top:.2rem"></div>
+      <label for="sh-n">Notes</label><input id="sh-n" placeholder="Optional">`}
+    <div class="row" style="margin-top:1rem;justify-content:flex-end"><button class="btn" data-x>Cancel</button><button class="btn pri" data-ok>${open?'Open bar':'Close bar'}</button></div>`,md=>{
+    md.querySelector('[data-x]').onclick=closeModal;
+    if(!open){
+      const c=md.querySelector('#sh-c');
+      c.addEventListener('input',()=>{const v=c.value;if(v===''){md.querySelector('#sh-diff').textContent='';return}
+        const d=r2(num(v)-expected);
+        md.querySelector('#sh-diff').innerHTML=d===0?'<span class="pos">Balanced ✓</span>':`<span class="${d<0?'neg':'pos'}">${d<0?'Short':'Over'} ${money(Math.abs(d))}</span>`});
+    }
+    md.querySelector('[data-ok]').onclick=async()=>{
+      if(open){
+        const b=md.querySelector('#sh-b').value.trim();
+        if(!b){toast('Enter who is behind the bar');return}
+        const oc=md.querySelector('#sh-o').value;
+        const je=md.querySelector('#sh-ev');
+        if(await write('openShift',{bartender:b,openingCash:oc===''?'':r2(num(oc)),joinEvent:!!(je&&je.checked)},`Bar open · ${b}`))closeModal();
+      }else{
+        await flushBar();
+        if(S.bar.queue.length){toast('Still saving drinks — try again in a moment');return}
+        const cv=md.querySelector('#sh-c').value;
+        if(cv===''&&!confirm('Close the bar without a cash count?'))return;
+        if(await write('closeShift',{id:sh.id,closingCash:cv===''?'':r2(num(cv)),notes:md.querySelector('#sh-n').value.trim()},'Bar closed'))closeModal();
+      }
+    };
+  });
+}
 function renderStock(){
   const sel=$('#st-cat'),cur=sel.value;
   const orph=orphanCats();
@@ -1185,7 +1462,7 @@ function renderStock(){
   const on=[...orph.values()].reduce((a,b)=>a+b,0);
   $('#st-orphan').innerHTML=on?`<div class="card" style="margin-bottom:1rem;border-color:var(--warn)">${on} item${on===1?' has':'s have'} a category that isn’t in the list (${[...orph.keys()].map(esc).join(', ')}). Fix it under <b>Settings → Categories</b>.</div>`:'';
   const known=new Set(S.settings.cats.map(catKey));
-  const q=$('#st-q').value.trim().toLowerCase(),low=$('#st-low').checked,arch=$('#st-arch').checked,saleOnly=$('#st-sale-only').checked;
+  const q=$('#st-q').value.trim().toLowerCase(),low=$('#st-low').checked,arch=$('#st-arch').checked,saleOnly=$('#st-sale-only').checked,sect=$('#st-section').value;
   const all=[...S.items.values()].sort(itemCmp);
   const act=all.filter(i=>i.active!==false);
   let units=0,val=0,retail=0,lowN=0;
@@ -1194,20 +1471,20 @@ function renderStock(){
   $('#st-stats').innerHTML=`
     <div class="card stat"><div class="v">${act.length}</div><div class="l">Active items</div></div>
     <div class="card stat"><div class="v">${units}</div><div class="l">Units on hand</div></div>
-    <div class="card stat"><div class="v money">${money(val)}</div><div class="l">Stock value at cost</div></div>
+    <div class="card stat cost-col"><div class="v money">${money(val)}</div><div class="l">Stock value at cost</div></div>
     <div class="card stat"><div class="v money">${money(retail)}</div><div class="l">Stock value at retail</div></div>
     <div class="card stat"><div class="v ${lowN?'neg':''}">${lowN}</div><div class="l">At or below reorder level</div></div>
     <div class="card stat"><div class="v">${saleN}</div><div class="l">Items on sale</div></div>`;
-  const rows=all.filter(i=>(arch||i.active!==false)&&(!cur||(cur==='__orphan'?!known.has(catKey(i.cat)):catKey(i.cat)===catKey(cur)))&&(!q||(label(i)+' '+(i.sku||'')).toLowerCase().includes(q))&&(!low||onHand(i.id)<=num(i.reorder))&&(!saleOnly||isOnSale(i)));
+  const rows=all.filter(i=>(arch||i.active!==false)&&(!cur||(cur==='__orphan'?!known.has(catKey(i.cat)):catKey(i.cat)===catKey(cur)))&&(!q||(label(i)+' '+(i.sku||'')).toLowerCase().includes(q))&&(!low||onHand(i.id)<=num(i.reorder))&&(!saleOnly||isOnSale(i))&&(!sect||(i.section||'merch')===sect));
   $('#st-body').innerHTML=rows.length?rows.map(i=>{
     const oh=onHand(i.id),isLow=i.active!==false&&oh<=num(i.reorder);
-    return `<tr class="${isLow?'low':''}" data-id="${esc(i.id)}"><td><div class="itemcell"><span data-zoomrow="${esc(i.id)}">${thumb(i,hasImg(i)?'mini zoomable':'mini')}</span><div><button type="button" class="linkish" data-detail="${esc(i.id)}"><b>${esc(i.name)}</b></button>${i.sku?` <span class="muted">· ${esc(i.sku)}</span>`:''}${i.active===false?' <span class="tag">archived</span>':''}${i.description?`<div class="desc">${esc(i.description)}</div>`:''}</div></div></td>
-    <td>${esc(i.cat)}</td><td>${esc(i.size)}</td><td class="num ${oh<0?'neg':''}"><b>${oh}</b>${heldElsewhere(i.id)?`<div class="muted" style="font-size:.8rem">${heldElsewhere(i.id)} in carts</div>`:''}</td><td class="num">${num(i.reorder)}</td>
-    <td class="num money">${priceHtml(i)}${isOnSale(i)&&num(i.salePrice)<num(i.cost)?'<div class="neg" style="font-size:.8rem">below cost</div>':''}</td><td class="num money">${money(num(i.cost))}</td><td class="num money">${money(Math.max(0,oh)*num(i.cost))}</td>
+    return `<tr class="${isLow?'low':''}" data-id="${esc(i.id)}"><td><div class="itemcell"><span data-zoomrow="${esc(i.id)}">${thumb(i,hasImg(i)?'mini zoomable':'mini')}</span><div><button type="button" class="linkish" data-detail="${esc(i.id)}"><b>${esc(i.name)}</b></button>${i.sku?` <span class="muted">· ${esc(i.sku)}</span>`:''}${i.memberOnly?' <span class="evbadge">MEMBERS</span>':''}${i.section==='bar'?' <span class="tag">bar</span>':''}${i.active===false?' <span class="tag">archived</span>':''}${i.description?`<div class="desc">${esc(i.description)}</div>`:''}</div></div></td>
+    <td>${esc(i.cat)}</td><td>${esc(i.size)}</td><td class="num ${oh<0?'neg':''}"><b>${isPour(i)?`${Math.floor(Math.max(0,oh)/i.pours)} btl + ${Math.max(0,oh)%i.pours}`:oh}</b>${isPour(i)?`<div class="muted" style="font-size:.8rem">${oh} pours</div>`:''}${heldElsewhere(i.id)?`<div class="muted" style="font-size:.8rem">${heldElsewhere(i.id)} in carts</div>`:''}</td><td class="num">${num(i.reorder)}</td>
+    <td class="num money">${priceHtml(i)}${isOnSale(i)&&num(i.salePrice)<num(i.cost)?'<div class="neg" style="font-size:.8rem">below cost</div>':''}</td><td class="num money cost-col">${money(num(i.cost))}</td><td class="num money cost-col">${money(Math.max(0,oh)*num(i.cost))}</td>
     <td class="admin-only act"><button class="btn sm" data-manage>Manage ▾</button></td></tr>`;
   }).join(''):`<tr><td colspan="9" class="empty">${S.items.size?'No items match.':'No items yet. Tap “Add item” to start.'}</td></tr>`;
 }
-['#st-q','#st-cat','#st-low','#st-arch','#st-sale-only'].forEach(s=>$(s).addEventListener('input',renderStock));
+['#st-q','#st-cat','#st-low','#st-arch','#st-sale-only','#st-section'].forEach(s=>$(s).addEventListener('input',renderStock));
 $('#st-add').onclick=()=>itemModal(null);
 $('#st-sale').onclick=()=>saleModal();
 let rowMenuBtn=null;
@@ -1265,9 +1542,11 @@ function itemModal(it){
         <span class="muted" id="f-pic-msg" style="font-size:.85rem"></span>
       </div></div>
     <label for="f-desc">Description</label><textarea id="f-desc" rows="3" maxlength="500" placeholder="Material, colors, fit, notes…">${esc(it.description||'')}</textarea>
+    <label>Where it's sold</label><div class="seg" id="f-section"><button type="button" data-s="merch" class="${it.section==='bar'?'':'on'}">Merch</button><button type="button" data-s="bar" class="${it.section==='bar'?'on':''}">Bar</button></div>
     <div class="row"><div class="grow"><label for="f-cat">Category</label><select id="f-cat">${catOpts}</select></div>
     <div class="grow"><label for="f-size">Size / variant</label><input id="f-size" value="${esc(it.size||'')}" placeholder="e.g. XL, Chrome, 2026"></div></div>
-    <div class="row"><div class="grow"><label for="f-price">Sell price ($)</label><input id="f-price" type="number" step="0.01" min="0" value="${it.price!=null?it.price:''}"></div>
+    <div id="f-barbox"></div>
+    <div class="row"><div class="grow"><label for="f-price" id="f-price-lbl">Sell price ($)</label><input id="f-price" type="number" step="0.01" min="0" value="${it.price!=null?it.price:''}"></div>
     <div class="grow"><label for="f-cost">Unit cost ($)</label><input id="f-cost" type="number" step="0.01" min="0" value="${it.cost!=null?it.cost:''}"></div></div>
     <div class="row"><div class="grow"><label for="f-sale">Sale price ($)</label><input id="f-sale" type="number" step="0.01" min="0" value="${num(it.salePrice)>0?it.salePrice:''}" placeholder="e.g. 5.00"></div>
     <div class="grow"><label>&nbsp;</label><label class="row" style="color:var(--ink);margin:0;min-height:44px"><input type="checkbox" id="f-onsale" style="width:auto;min-height:0" ${it.onSale?'checked':''}> On sale now</label></div></div>
@@ -1283,7 +1562,37 @@ function itemModal(it){
       <div class="row"><button class="btn" data-x>Cancel</button>${!isNew?'<button class="btn" data-dup>Save as new size…</button>':''}<button class="btn pri" data-ok>Save</button></div>
     </div>`,md=>{
     const g=id=>md.querySelector('#'+id);
-    const read=()=>({name:g('f-name').value.trim(),cat:g('f-cat').value,size:g('f-size').value.trim(),price:r2(num(g('f-price').value)),cost:r2(num(g('f-cost').value)),reorder:Math.max(0,Math.round(num(g('f-reorder').value))),sku:g('f-sku').value.trim(),salePrice:g('f-sale').value===''?'':r2(num(g('f-sale').value)),shipPrice:g('f-ship').value===''?'':r2(num(g('f-ship').value)),onSale:g('f-onsale').checked,description:g('f-desc').value.trim()});
+    let section=it.section==='bar'?'bar':'merch';
+    let btype=it.poursFrom?'mixed':(num(it.pours)>0?'bottle':'whole');
+    const OZ={'750ml':25.4,'1L':33.8,'1.75L':59.2,'375ml':12.7,'473ml':16};
+    function drawBar(){
+      md.querySelectorAll('#f-section button').forEach(b=>b.classList.toggle('on',b.dataset.s===section));
+      g('f-price-lbl').textContent=section==='bar'?'Member donation ($)':'Sell price ($)';
+      const box=g('f-barbox');
+      if(section!=='bar'){box.innerHTML=`<label class="row" style="color:var(--ink)"><input type="checkbox" id="f-memonly" style="width:auto;min-height:0" ${it.memberOnly?'checked':''}> Members-only item</label>`;return}
+      const liq=[...S.items.values()].filter(z=>num(z.pours)>0&&z.id!==it.id);
+      box.innerHTML=`<div class="row"><div class="grow"><label for="f-guest">Guest donation ($)</label><input id="f-guest" type="number" step="0.25" min="0" inputmode="decimal" value="${num(it.guestPrice)>0?it.guestPrice:''}" placeholder="Same as member if blank"></div></div>
+        <label>Drink type</label><div class="seg" id="f-btype"><button type="button" data-b="whole" class="${btype==='whole'?'on':''}">Can / bottle</button><button type="button" data-b="bottle" class="${btype==='bottle'?'on':''}">Spirits bottle</button><button type="button" data-b="mixed" class="${btype==='mixed'?'on':''}">Mixed drink</button></div>
+        ${btype==='bottle'?`<div class="row"><div class="grow"><label for="f-bsize">Bottle size</label><select id="f-bsize">${Object.keys(OZ).map(s=>`<option ${it.bottleSize===s?'selected':''}>${s}</option>`).join('')}</select></div>
+          <div class="grow"><label for="f-poz">Pour (oz)</label><input id="f-poz" type="number" step="0.25" min="0.25" max="6" value="${num(it.pourOz)||1.5}"></div>
+          <div class="grow"><label for="f-pours">Pours per bottle</label><input id="f-pours" type="number" step="1" min="1" value="${num(it.pours)||''}"></div></div>
+          <p class="muted" style="font-size:.85rem">Stock is counted in pours — receive in bottles and the app converts.</p>`:''}
+        ${btype==='mixed'?`<div class="row"><div class="grow"><label for="f-from">Pours from</label><select id="f-from">${liq.length?liq.map(z=>`<option value="${esc(z.id)}" ${it.poursFrom===z.id?'selected':''}>${esc(label(z))}</option>`).join(''):'<option value="">— add a spirits bottle first —</option>'}</select></div>
+          <div class="grow"><label for="f-per">Pours per drink</label><input id="f-per" type="number" step="1" min="1" max="6" value="${num(it.poursPer)||1}"></div></div>`:''}`;
+      const bs=g('f-bsize'),poz=g('f-poz'),pr=g('f-pours');
+      if(bs){const calc=()=>{pr.value=Math.floor((OZ[bs.value]||0)/(num(poz.value)||1.5))};bs.onchange=calc;poz.oninput=calc;if(!num(pr.value))calc()}
+      md.querySelectorAll('#f-btype button').forEach(b=>b.onclick=()=>{btype=b.dataset.b;drawBar()});
+    }
+    md.querySelector('#f-section').onclick=e=>{const b=e.target.closest('[data-s]');if(!b)return;section=b.dataset.s;drawBar()};
+    drawBar();
+    const read=()=>({section:section,memberOnly:!!(g('f-memonly')&&g('f-memonly').checked),
+      guestPrice:g('f-guest')?(g('f-guest').value===''?'':r2(num(g('f-guest').value))):'',
+      bottleSize:(btype==='bottle'&&g('f-bsize'))?g('f-bsize').value:'',
+      pourOz:(btype==='bottle'&&g('f-poz'))?num(g('f-poz').value):'',
+      pours:(btype==='bottle'&&g('f-pours'))?Math.round(num(g('f-pours').value)):'',
+      poursFrom:(btype==='mixed'&&g('f-from'))?g('f-from').value:'',
+      poursPer:(btype==='mixed'&&g('f-per'))?Math.round(num(g('f-per').value)):'',
+      name:g('f-name').value.trim(),cat:g('f-cat').value,size:g('f-size').value.trim(),price:r2(num(g('f-price').value)),cost:r2(num(g('f-cost').value)),reorder:Math.max(0,Math.round(num(g('f-reorder').value))),sku:g('f-sku').value.trim(),salePrice:g('f-sale').value===''?'':r2(num(g('f-sale').value)),shipPrice:g('f-ship').value===''?'':r2(num(g('f-ship').value)),onSale:g('f-onsale').checked,description:g('f-desc').value.trim()});
     g('f-file').onchange=async e=>{
       const f=e.target.files&&e.target.files[0];if(!f)return;
       g('f-pic-msg').textContent='Processing…';
@@ -1362,6 +1671,7 @@ function saleModal(){
 
 function moveModal(it,type){
   const oh=onHand(it.id);
+  const pour=isPour(it);
   const modes={receive:'Receive stock',adjust:'Physical count',loss:'Loss / damage',comp:'Comp / give-away'};
   openModal(`<h3>${esc(label(it))}</h3><p class="muted" style="margin-top:0">On hand now: <b>${oh}</b></p>
     <div class="seg" id="m-type">${Object.entries(modes).map(([k,v])=>`<button data-t="${k}" class="${k===type?'on':''}">${v}</button>`).join('')}</div>
@@ -1371,17 +1681,28 @@ function moveModal(it,type){
     <div class="row" style="margin-top:.6rem;justify-content:flex-end"><button class="btn" data-x>Cancel</button><button class="btn pri" data-ok>Record</button></div>`,md=>{
     let t=type;
     const body=md.querySelector('#m-body'),note=md.querySelector('#m-note'),prev=md.querySelector('#m-prev');
+    const pourQty=()=>{
+      const b=body.querySelector('#m-b');if(!b)return null;
+      const qs=body.querySelector('#m-qtr');
+      const whole=Math.round(num(b.value))*it.pours;
+      return qs?whole+Math.round(num(qs.value)*it.pours):whole;
+    };
     const pv=()=>{
+      const pq=pourQty();
+      if(pq!=null)body.querySelector('#m-q').value=pq;
       const q=Math.round(num(body.querySelector('#m-q').value));
       const d=t==='receive'?q:t==='adjust'?q-oh:-q;
-      prev.textContent=`On hand after: ${oh+d}  (${d>=0?'+':''}${d})`;
+      prev.textContent=pour?`${pq!=null?`${pq} pours · `:''}On hand after: ${oh+d} pours  (${d>=0?'+':''}${d})`:`On hand after: ${oh+d}  (${d>=0?'+':''}${d})`;
     };
     const draw=()=>{
       md.querySelectorAll('#m-type button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
-      if(t==='receive'){body.innerHTML=`<div class="row"><div class="grow"><label for="m-q">Quantity received</label><input id="m-q" type="number" min="1" step="1"></div><div class="grow"><label for="m-c">Unit cost ($)</label><input id="m-c" type="number" min="0" step="0.01" value="${num(it.cost)}"></div></div>`;note.placeholder='Supplier, invoice #, order…'}
-      else if(t==='adjust'){body.innerHTML=`<label for="m-q">Counted on shelf</label><input id="m-q" type="number" min="0" step="1" value="${Math.max(0,oh)}">`;note.placeholder='e.g. Quarterly count'}
-      else{body.innerHTML=`<label for="m-q">Quantity</label><input id="m-q" type="number" min="1" step="1">`;note.placeholder=t==='loss'?'What happened? (required)':'Given to whom / why? (required)'}
-      body.querySelector('#m-q').addEventListener('input',pv);pv();
+      if(t==='receive'){body.innerHTML=pour?`<div class="row"><div class="grow"><label for="m-b">Bottles received</label><input id="m-b" type="number" min="1" step="1"></div><div class="grow"><label for="m-c">Cost per bottle ($)</label><input id="m-c" type="number" min="0" step="0.01" value="${r2(num(it.cost)*it.pours)}"></div></div><input id="m-q" type="hidden">`
+        :`<div class="row"><div class="grow"><label for="m-q">Quantity received</label><input id="m-q" type="number" min="1" step="1"></div><div class="grow"><label for="m-c">Unit cost ($)</label><input id="m-c" type="number" min="0" step="0.01" value="${num(it.cost)}"></div></div>`;note.placeholder='Supplier, invoice #, order…'}
+      else if(t==='adjust'){body.innerHTML=pour?`<div class="row"><div class="grow"><label for="m-b">Full bottles counted</label><input id="m-b" type="number" min="0" step="1" value="${Math.floor(Math.max(0,oh)/it.pours)}"></div>
+        <div class="grow"><label for="m-qtr">Open bottle</label><select id="m-qtr"><option value="0">empty</option><option value="0.25">¼ left</option><option value="0.5" selected>½ left</option><option value="0.75">¾ left</option><option value="1">full</option></select></div></div><input id="m-q" type="hidden">`
+        :`<label for="m-q">Counted on shelf</label><input id="m-q" type="number" min="0" step="1" value="${Math.max(0,oh)}">`;note.placeholder='e.g. Quarterly count'}
+      else{body.innerHTML=`<label for="m-q">Quantity${pour?' (pours)':''}</label><input id="m-q" type="number" min="1" step="1">`;note.placeholder=t==='loss'?'What happened? (required)':'Given to whom / why? (required)'}
+      body.querySelectorAll('input,select').forEach(el=>el.addEventListener('input',pv));pv();
     };
     md.querySelector('#m-type').onclick=e=>{const b=e.target.closest('[data-t]');if(!b)return;t=b.dataset.t;draw()};
     md.querySelector('[data-x]').onclick=closeModal;
@@ -1390,7 +1711,8 @@ function moveModal(it,type){
       if(t==='adjust'){if(q<0){toast('Count can’t be negative');return}if(q===oh){toast('Count matches — nothing to record');closeModal();return}}
       else if(q<=0){toast('Enter a quantity');return}
       if((t==='loss'||t==='comp')&&!n){toast('Add a note explaining this');note.focus();return}
-      const c=t==='receive'?r2(Math.max(0,num(body.querySelector('#m-c').value))):0;
+      let c=t==='receive'?r2(Math.max(0,num(body.querySelector('#m-c').value))):0;
+      if(t==='receive'&&pour&&it.pours>0)c=r2(c/it.pours);
       if(await write('recordMove',{id:it.id,type:t,qty:q,cost:c,note:n},TYPES[t]+' recorded'))closeModal();
     };
     draw();
@@ -1537,12 +1859,13 @@ function eventSummary(ev){
   const expected2=r2(expected+cinc-cexp);
   const diff2=ev.closingCash==null?null:r2(num(ev.closingCash)-expected2);
   const reimb={};for(const e of exp)if(e.pay==='Personal'){const k=e.party||'?';reimb[k]=(reimb[k]||0)+num(e.total)}
+  const barShifts=S.shifts.filter(sh=>sh.event===ev.id);
   const tabs=es.filter(e=>isCharge(e)).reduce((s,e)=>s+num(e.total),0);
   return {sales,rev,cogs,cs,cship,cpay,opening,expected:expected2,diff:diff2,tabs,count:new Set(sales.map(e=>e.sale||e.id)).size,cashName,
     inc,exp,cinc,cexp,incTot,payouts,costs,reimb,
     riders:cntK('riders'),passengers:cntK('passengers'),ridersAmt:sumK(inc,'riders'),passAmt:sumK(inc,'passengers'),
     fifty:sumK(inc,'fifty'),basket:sumK(inc,'basket'),raffle:sumK(inc,'raffle'),otherinc:sumK(inc,'otherinc'),
-    net:r2((rev-cogs)+incTot-payouts-costs)};
+    barShifts,net:r2((rev-cogs)+incTot-payouts-costs)};
 }
 function extrasHtml(x){
   const row=(l,v,extra)=>v?`<span>${l}${extra?` <span class="muted">${extra}</span>`:''}</span><span class="money">${money(v)}</span>`:'';
@@ -1552,7 +1875,7 @@ function extrasHtml(x){
     ${row('50/50 tickets',x.fifty)}${row('Basket drawing',x.basket)}${row('Cash raffle',x.raffle)}${row('Other income',x.otherinc)}
     ${x.payouts?`<span>− Payouts / prizes</span><span class="money">−${money(x.payouts)}</span>`:''}
     ${x.costs?`<span>− Costs</span><span class="money">−${money(x.costs)}</span>`:''}
-    <span>Merch profit</span><span class="money">${money(x.rev-x.cogs)}</span>
+    <span>Merch &amp; bar profit</span><span class="money">${money(x.rev-x.cogs)}</span>
     <span class="tot">Event net</span><span class="tot money ${x.net<0?'neg':''}">${money(x.net)}</span>
   </div>${reimb.length?`<p style="margin:.4rem 0 0"><b>Reimburse:</b> ${reimb.map(([k,v])=>`${esc(k)} ${money(v)}`).join(' · ')}</p>`:''}`;
 }
@@ -1585,6 +1908,21 @@ function renderReports(){
       <div><h3 style="font-size:1rem">At this event</h3><div class="cashbox"><span>Sales</span><span>${x.count}</span><span>Revenue</span><span class="money">${money(x.rev)}</span><span>Profit</span><span class="money">${money(x.rev-x.cogs)}</span><span>Charged to tabs</span><span class="money">${money(x.tabs)}</span><span>Event prices set</span><span>${Object.keys(selEv.prices||{}).length} items</span></div></div></div>
     </div>`;
   }else $('#rp-event').innerHTML='';
+  const barEs=es.filter(e=>e.section==='bar');
+  const barSales=barEs.filter(e=>e.type==='sale');
+  const barRev=barSales.reduce((s,e)=>s+num(e.total),0);
+  const barCost=barSales.reduce((s,e)=>s-num(e.qty)*num(e.cost),0);
+  const barComps=barEs.filter(e=>e.type==='comp').length;
+  if(barRev||barComps)$('#rp-stats').insertAdjacentHTML('beforeend',`<div class="card stat"><div class="v money">${money(barRev)}</div><div class="l">Bar donations · ${barSales.length} drinks</div></div><div class="card stat cost-col"><div class="v money">${money(barRev-barCost)}</div><div class="l">Bar profit${barComps?` · ${barComps} comped`:''}</div></div>`);
+  const shifts=S.shifts.filter(sh=>m==='all'||(m.indexOf('ev:')===0?sh.event===m.slice(3):monthKey(new Date(sh.openedAt))===m));
+  const cashName=(S.settings.pays||[]).find(p=>p.trim().toLowerCase()==='cash')||'';
+  $('#rp-shifts').innerHTML=shifts.length?shifts.map(sh=>{
+    const e2=live().filter(e=>e.shift===sh.id),sl=e2.filter(e=>e.type==='sale');
+    const cash=sl.filter(e=>e.pay===cashName).reduce((s,e)=>s+num(e.total),0);
+    const exp=r2((sh.openingCash==null?0:num(sh.openingCash))+cash);
+    const d=sh.closingCash==null?null:r2(num(sh.closingCash)-exp);
+    return `<tr><td><b>${esc(sh.bartender)}</b><div class="muted" style="font-size:.8rem">${sh.closedAt?'':'● open · '}${new Date(sh.openedAt).toLocaleDateString()}${sh.event?' · '+esc(eventName(sh.event)):''}</div></td><td class="num">${sl.length}</td><td class="num money">${money(sl.reduce((s,e)=>s+num(e.total),0))}</td><td class="num money ${d<0?'neg':d>0?'pos':''}">${d==null?'—':d===0?'✓':(d>0?'+':'−')+money(Math.abs(d))}</td></tr>`;
+  }).join(''):'<tr><td colspan="4" class="empty">No bar shifts.</td></tr>';
   $('#rp-events').innerHTML=S.events.length?S.events.map(ev=>{const x=eventSummary(ev);return `<tr><td><button type="button" class="linkish" data-evsel="${esc(ev.id)}"><b>${esc(ev.name)}</b></button><div class="muted" style="font-size:.8rem">${ev.endedAt?'':'● running · '}${new Date(ev.startedAt).toLocaleDateString()}</div></td><td class="num">${x.count}</td><td class="num money">${money(x.rev)}</td><td class="num money ${x.net<0?'neg':''}">${money(x.net)}</td><td class="num money ${x.diff<0?'neg':x.diff>0?'pos':''}">${x.diff==null?'—':x.diff===0?'✓':(x.diff>0?'+':'−')+money(Math.abs(x.diff))}</td></tr>`}).join('')
     :'<tr><td colspan="5" class="empty">No events yet.</td></tr>';
   const sales=es.filter(e=>e.type==='sale');
@@ -1647,7 +1985,7 @@ function renderUsers(){
   const me=String(S.email||'').toLowerCase();
   const rows=[{email:S.owner,role:'admin',owner:true},...S.users.filter(u=>u.email!==S.owner)];
   $('#se-users').innerHTML=rows.filter(u=>u.email).map(u=>`<tr class="userrow" data-e="${esc(u.email)}"><td>${esc(u.email)}${u.email===me?' <span class="muted">(you)</span>':''}</td>
-    <td>${u.owner?'<b>Owner</b>':`<select data-role><option value="user" ${u.role!=='admin'?'selected':''}>User</option><option value="admin" ${u.role==='admin'?'selected':''}>Admin</option></select>`}</td>
+    <td>${u.owner?'<b>Owner</b>':`<select data-role><option value="user" ${u.role!=='admin'&&u.role!=='bar'?'selected':''}>User</option><option value="bar" ${u.role==='bar'?'selected':''}>Bar tablet</option><option value="admin" ${u.role==='admin'?'selected':''}>Admin</option></select>`}</td>
     <td class="act">${u.owner?'':'<button class="btn sm" data-rm>Remove</button>'}</td></tr>`).join('');
 }
 function saveUsers(list,msg){return write('saveUsers',{users:list},msg)}
@@ -1744,10 +2082,11 @@ $('#se-signout').onclick=()=>{if(S.cart.size&&!confirm('Sign out and clear your 
 $('#se-save-me').onclick=()=>{store('qm_who',$('#se-who').value.trim());store('qm_theme',$('#se-theme').value);applyTheme();showWho();toast('Saved on this device')};
 
 function refresh(){
-  renderEvBar();
+  renderEvBar();renderBarBar();
   const c=S.settings.club||'Quartermaster',ch=S.settings.chapter||'';
   $('#title').innerHTML=`${esc(c)}${ch?' · '+esc(ch):''} <span>· Quartermaster</span>`;
   if(S.view==='sell')renderSell();
+  else if(S.view==='bar')renderBar();
   else if(S.view==='tabs')renderTabs();
   else if(S.view==='stock')renderStock();
   else if(S.view==='ledger')renderLedger();
