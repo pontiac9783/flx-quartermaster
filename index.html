@@ -392,7 +392,8 @@ body.role-user .admin-only{display:none!important}
       </div>
       <div class="card admin-only">
         <h3>Categories</h3>
-        <p class="muted" style="margin-top:0">Renaming or deleting a category updates every item that uses it.</p>
+        <div class="seg" id="se-catsec"><button type="button" data-s="merch" class="on">Merch</button><button type="button" data-s="bar">Bar</button></div>
+        <p class="muted" style="margin:.5rem 0 0">Renaming or deleting a category updates every item in that list.</p>
         <div class="tw"><table><thead><tr><th>Category</th><th class="num">Items</th><th></th></tr></thead><tbody id="se-catlist"></tbody></table></div>
         <div class="row" style="margin-top:.6rem"><input id="se-newcat" class="grow" placeholder="New category"><button class="btn" id="se-addcat">Add</button></div>
       </div>
@@ -795,8 +796,7 @@ $('#nav').addEventListener('click',e=>{
 function activeItems(){return [...S.items.values()].filter(i=>i.active!==false).sort(itemCmp)}
 function renderSell(){
   const barCats=new Set(barItems().map(i=>catKey(i.cat)));
-  const merchCats=new Set(activeItems().filter(i=>i.section!=='bar').map(i=>catKey(i.cat)));
-  const cats=['',...S.settings.cats.filter(c=>!barCats.has(catKey(c))||merchCats.has(catKey(c)))];
+  const cats=['',...catsFor('merch')];
   $('#s-cats').innerHTML=cats.map(c=>`<button class="chip ${S.cat===c?'on':''}" data-c="${esc(c)}">${c?esc(c):'All'}</button>`).join('');
   const q=$('#s-q').value.trim().toLowerCase();
   const oos=$('#s-oos').checked;
@@ -1228,6 +1228,7 @@ function eventModal(ev){
   $('#md').style.maxWidth='640px';
 }
 /* ---------------- bar ---------------- */
+const catsFor=sec=>((sec==='bar'?S.settings.barCats:S.settings.cats)||[]);
 const barItems=()=>[...S.items.values()].filter(i=>i.section==='bar'&&i.active!==false);
 const isPour=i=>!!(i&&i.pours>0);
 function stockTargetId(i){return (i.poursFrom&&S.items.has(i.poursFrom))?i.poursFrom:i.id}
@@ -1253,15 +1254,16 @@ function renderBarBar(){
   }else bar.className='';
 }
 function renderBar(){
-  const cats=[...new Set(barItems().map(i=>i.cat).filter(Boolean))];
-  if(S.bar.cat&&!cats.includes(S.bar.cat))S.bar.cat='';
+  const used=new Set(barItems().map(i=>catKey(i.cat)).filter(Boolean));
+  const cats=[...catsFor('bar'),...[...new Set(barItems().map(i=>i.cat))].filter(c=>c&&!catsFor('bar').some(x=>catKey(x)===catKey(c)))];
+  if(S.bar.cat&&!cats.some(c=>catKey(c)===catKey(S.bar.cat)))S.bar.cat='';
   $('#bar-cats').innerHTML=['',...cats].map(c=>`<button class="chip ${S.bar.cat===c?'on':''}" data-c="${esc(c)}">${c?esc(c):'All'}</button>`).join('');
   $('#bar-who').querySelectorAll('button').forEach(b=>b.classList.toggle('on',(b.dataset.w==='guest')===S.bar.guest));
   $('#bar-tab').textContent=S.bar.party?`Tab: ${S.bar.party}`:'Walk-up';
   $('#bar-tab').classList.toggle('pri',!!S.bar.party);
   $('#bar-comp').textContent=S.bar.comp?'Comp: ON':'Comp: off';
   $('#bar-comp').classList.toggle('pri',S.bar.comp);
-  const list=barItems().filter(i=>!S.bar.cat||i.cat===S.bar.cat).sort(itemCmp);
+  const list=barItems().filter(i=>!S.bar.cat||catKey(i.cat)===catKey(S.bar.cat)).sort(itemCmp);
   $('#bar-grid').innerHTML=list.map(i=>{
     const l=levelText(i);
     return `<button class="drink ${l.n<=0?'dim':''}" data-id="${esc(i.id)}"><span class="lvl ${l.n<=0?'out':l.low?'low':''}">${esc(l.txt)}</span><b>${esc(i.name)}</b><span class="muted" style="font-size:.85rem">${esc(i.size||i.cat||'')}</span><span class="amt">${money(barPrice(i))}</span></button>`;
@@ -1457,8 +1459,10 @@ function shiftModal(sh){
 }
 function renderStock(){
   const sel=$('#st-cat'),cur=sel.value;
-  const orph=orphanCats();
-  sel.innerHTML='<option value="">All categories</option>'+S.settings.cats.map(c=>`<option ${c===cur?'selected':''}>${esc(c)}</option>`).join('')+(orph.size?`<option value="__orphan" ${cur==='__orphan'?'selected':''}>Not in category list</option>`:'');
+  const orph=new Map([...orphanCats('merch'),...orphanCats('bar')]);
+  const sectNow=$('#st-section').value;
+  const catList=sectNow==='bar'?catsFor('bar'):sectNow==='merch'?catsFor('merch'):[...catsFor('merch'),...catsFor('bar')];
+  sel.innerHTML='<option value="">All categories</option>'+catList.map(c=>`<option ${c===cur?'selected':''}>${esc(c)}</option>`).join('')+(orph.size?`<option value="__orphan" ${cur==='__orphan'?'selected':''}>Not in category list</option>`:'');
   const on=[...orph.values()].reduce((a,b)=>a+b,0);
   $('#st-orphan').innerHTML=on?`<div class="card" style="margin-bottom:1rem;border-color:var(--warn)">${on} item${on===1?' has':'s have'} a category that isn’t in the list (${[...orph.keys()].map(esc).join(', ')}). Fix it under <b>Settings → Categories</b>.</div>`:'';
   const known=new Set(S.settings.cats.map(catKey));
@@ -1527,8 +1531,9 @@ $('#st-body').addEventListener('click',e=>{
 });
 
 function itemModal(it){
-  const isNew=!it||!it.id;it=it||{cat:S.settings.cats[0],reorder:3,active:true};
-  const catOpts=[...new Set([...S.settings.cats,it.cat].filter(Boolean))].map(c=>`<option ${c===it.cat?'selected':''}>${esc(c)}</option>`).join('');
+  const isNew=!it||!it.id;it=it||{cat:(S.settings.cats||[])[0]||'',reorder:3,active:true,section:'merch'};
+  const catOptsFor=sec=>[...new Set([...catsFor(sec),(it.id&&(it.section||'merch')===sec)?it.cat:''].filter(Boolean))].map(c=>`<option ${c===it.cat?'selected':''}>${esc(c)}</option>`).join('');
+  const catOpts=catOptsFor(it.section==='bar'?'bar':'merch');
   const hasHistory=!isNew&&S.entries.some(e=>e.itemId===it.id);
   const siblings=isNew?0:[...S.items.values()].filter(x=>catKey(x.name)===catKey(it.name)).length;
   let pic;   
@@ -1568,6 +1573,9 @@ function itemModal(it){
     function drawBar(){
       md.querySelectorAll('#f-section button').forEach(b=>b.classList.toggle('on',b.dataset.s===section));
       g('f-price-lbl').textContent=section==='bar'?'Member donation ($)':'Sell price ($)';
+      const csel=g('f-cat'),keep=csel.value;
+      csel.innerHTML=catOptsFor(section);
+      if([...csel.options].some(o=>o.value===keep))csel.value=keep;
       const box=g('f-barbox');
       if(section!=='bar'){box.innerHTML=`<label class="row" style="color:var(--ink)"><input type="checkbox" id="f-memonly" style="width:auto;min-height:0" ${it.memberOnly?'checked':''}> Members-only item</label>`;return}
       const liq=[...S.items.values()].filter(z=>num(z.pours)>0&&z.id!==it.id);
@@ -1978,8 +1986,9 @@ $('#rp-top').addEventListener('click',e=>{const d=e.target.closest('[data-detail
 let settingsDirty=false;
 ['#se-club','#se-chapter','#se-pays','#se-mpays'].forEach(s=>$(s).addEventListener('input',()=>settingsDirty=true));
 const catKey=c=>String(c||'').trim().toLowerCase();
-function catCounts(){const m={};for(const i of S.items.values()){const k=catKey(i.cat);m[k]=(m[k]||0)+1}return m}
-function orphanCats(){const known=new Set(S.settings.cats.map(catKey));const out=new Map();for(const i of S.items.values()){if(!known.has(catKey(i.cat))){const k=i.cat||'(blank)';out.set(k,(out.get(k)||0)+1)}}return out}
+let catSec='merch';
+function catCounts(sec){const m={};for(const i of S.items.values()){if(sec&&(i.section||'merch')!==sec)continue;const k=catKey(i.cat);m[k]=(m[k]||0)+1}return m}
+function orphanCats(sec){const known=new Set(catsFor(sec||'merch').map(catKey));const out=new Map();for(const i of S.items.values()){if((i.section||'merch')!==(sec||'merch'))continue;if(!known.has(catKey(i.cat))){const k=i.cat||'(blank)';out.set(k,(out.get(k)||0)+1)}}return out}
 function renderUsers(){
   if(!isAdmin())return;
   const me=String(S.email||'').toLowerCase();
@@ -2011,9 +2020,10 @@ function renderSettings(){
   $('#se-save').disabled=!S.loaded;$('#se-addcat').disabled=!S.loaded;
   if(!S.loaded){$('#se-catlist').innerHTML='<tr><td colspan="3" class="empty">Loading settings…</td></tr>';return}
   if(!settingsDirty){$('#se-club').value=S.settings.club;$('#se-chapter').value=S.settings.chapter||'';$('#se-pays').value=S.settings.pays.join('\n');$('#se-mpays').value=(S.settings.memberPays||[]).join('\n')}
-  const cnt=catCounts();
-  const orph=orphanCats();
-  $('#se-catlist').innerHTML=S.settings.cats.map(c=>`<tr data-c="${esc(c)}"><td>${esc(c)}</td><td class="num">${cnt[catKey(c)]||0}</td>
+  md_catsec();
+  const cnt=catCounts(catSec);
+  const orph=orphanCats(catSec);
+  $('#se-catlist').innerHTML=catsFor(catSec).map(c=>`<tr data-c="${esc(c)}"><td>${esc(c)}</td><td class="num">${cnt[catKey(c)]||0}</td>
     <td><div class="row" style="flex-wrap:nowrap;justify-content:flex-end"><button class="btn sm" data-ren>Rename</button><button class="btn sm" data-del>Delete</button></div></td></tr>`).join('')+
     [...orph].map(([c,n])=>`<tr data-c="${esc(c)}" class="low"><td>${esc(c)} <span class="tag">not in list</span></td><td class="num">${n}</td>
     <td><div class="row" style="flex-wrap:nowrap;justify-content:flex-end"><button class="btn sm" data-ren>Fix…</button></div></td></tr>`).join('');
@@ -2028,19 +2038,21 @@ $('#se-save').onclick=async()=>{
   if(!d.pays.length){toast('Need at least one payment method');return}
   if(await write('saveSettings',d,'Club settings saved'))settingsDirty=false;
 };
+function md_catsec(){document.querySelectorAll('#se-catsec button').forEach(b=>b.classList.toggle('on',b.dataset.s===catSec))}
+$('#se-catsec').addEventListener('click',e=>{const b=e.target.closest('[data-s]');if(!b)return;catSec=b.dataset.s;renderSettings()});
 $('#se-addcat').onclick=async()=>{
   const n=$('#se-newcat').value.trim();if(!n)return;
-  if(await write('addCategory',{name:n},'Category added'))$('#se-newcat').value='';
+  if(await write('addCategory',{name:n,section:catSec},`${catSec==='bar'?'Bar':'Merch'} category added`))$('#se-newcat').value='';
 };
 $('#se-newcat').addEventListener('keydown',e=>{if(e.key==='Enter')$('#se-addcat').click()});
 $('#se-catlist').addEventListener('click',e=>{
   const row=e.target.closest('tr');if(!row)return;
-  const c=row.dataset.c,n=catCounts()[catKey(c)]||0;
+  const c=row.dataset.c,n=catCounts(catSec)[catKey(c)]||0;
   if(e.target.closest('[data-ren]'))renameCatModal(c,n);
   else if(e.target.closest('[data-del]'))deleteCatModal(c,n);
 });
 function renameCatModal(from,n){
-  const others=S.settings.cats.filter(c=>catKey(c)!==catKey(from));
+  const others=catsFor(catSec).filter(c=>catKey(c)!==catKey(from));
   openModal(`<h3>Rename “${esc(from)}”</h3>
     <p class="muted">${n} item${n===1?'':'s'} will be updated. Existing SKUs and past ledger entries are not changed.</p>
     <label for="rc-to">New name</label><input id="rc-to" value="${esc(from)}" list="rc-list"><datalist id="rc-list">${others.map(c=>`<option value="${esc(c)}">`).join('')}</datalist>
@@ -2053,12 +2065,12 @@ function renameCatModal(from,n){
     md.querySelector('[data-ok]').onclick=async()=>{
       const to=inp.value.trim();if(!to){inp.focus();return}
       if(to===from){closeModal();return}
-      if(await write('renameCategory',{from,to},`Category updated · ${n} item${n===1?'':'s'}`))closeModal();
+      if(await write('renameCategory',{from,to,section:catSec},`Category updated · ${n} item${n===1?'':'s'}`))closeModal();
     };
   });
 }
 function deleteCatModal(name,n){
-  const others=S.settings.cats.filter(c=>catKey(c)!==catKey(name));
+  const others=catsFor(catSec).filter(c=>catKey(c)!==catKey(name));
   if(!others.length){toast('At least one category is required');return}
   openModal(`<h3>Delete “${esc(name)}”</h3>
     ${n?`<p>${n} item${n===1?' uses':'s use'} this category. Move ${n===1?'it':'them'} to:</p>
@@ -2067,7 +2079,7 @@ function deleteCatModal(name,n){
     md.querySelector('[data-x]').onclick=closeModal;
     md.querySelector('[data-ok]').onclick=async()=>{
       const sel=md.querySelector('#dc-to');
-      if(await write('deleteCategory',{name,reassignTo:sel?sel.value:''},'Category deleted'))closeModal();
+      if(await write('deleteCategory',{name,reassignTo:sel?sel.value:'',section:catSec},'Category deleted'))closeModal();
     };
   });
 }
