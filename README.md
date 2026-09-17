@@ -17,6 +17,8 @@ Installable web app (PWA) for Android, iPhone/iPad and PC. Free to run.
 | **Tabs** | Club Account (member tab) charges, balances, partial/full payments, per-member history. |
 | **Events** | Admins start/end an event (e.g. a rally) and set rider/passenger fees. While running, sales, shipping, tab charges and tab payments are tagged; optional event-only prices (devices re-price carts automatically if prices change; stale checkouts are rejected); opening/closing cash count with over/short. |
 | **Event money** | Anyone can record rider/passenger fees, 50/50 drawings (auto half payout), basket drawing tickets, cash raffle (tickets + prize), other income and out-of-pocket costs (paid from cash box, card, or personally → reimbursement list). Included in the cash box check and the event net (merch profit + income − payouts − costs). |
+| **Bar** | Tablet-first Bar screen: one tap = one drink (donation), member/guest pricing, member tab mode, comps with reason, quick items, Undo / Last 10. Taps are recorded locally and sent in batches. Bar shifts have their own cash box (open/close count, over/short) and can be counted toward a running event. |
+| **Spirits** | Bottle size + pour size → pours per bottle. Stock is held in pours; receive in bottles, count as bottles + quarters. Mixed drinks deduct pours from their liquor. |
 | **Item details** | Tap an item name (Stock, Reports → Top sellers): picture, price/cost/margin, on hand & held, days of stock left, sales this month / 30 days / all time, profit, 12-week trend, per-size breakdown, recent activity. |
 | **Stock** | Items with category, size/variant, auto SKU, price, cost, reorder level, picture, description. Receive, physical count, loss/damage, comp. |
 | **Sale pricing** | Per item or bulk (whole product / category). Regular price is kept; ending a sale restores it. |
@@ -34,6 +36,8 @@ Installable web app (PWA) for Android, iPhone/iPad and PC. Free to run.
 | Reports (incl. COGS, profit) | ✅ | ✅ |
 | Add/edit items, receive, count, write-off, sale pricing | ❌ | ✅ |
 | Ledger, void | ❌ | ✅ |
+
+A third role, **Bar tablet**, sees only Bar, Tabs, Stock and device settings — no costs, no Sell/Ledger/Reports. Intended for a shared tablet account left signed in at the bar; the shift records who is behind the bar.
 | Settings, categories, user management | ❌ | ✅ |
 
 Roles are enforced server-side: all changes go through the API and are checked against the user's role. Users have read-only access to stock and reports for transparency; nobody except the owner needs access to the Sheet itself. The Sheet owner is always admin.
@@ -150,9 +154,13 @@ Send them the app link and install steps. To remove access, remove them in **Set
 
 **Items**
 
-| A | B | C | D | E | F | G | H | I | J | K | L | M | N | O | P | Q |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| ItemID | Name | Category | Size | SKU | Price | UnitCost | ReorderAt | Active | Created | OnHand* | StockValue* | SalePrice | OnSale | Description | ImageID | ShipPrice |
+| A | B | C | D | E | F | G | H | I | J | K | L | M |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| ItemID | Name | Category | Size | SKU | Price | UnitCost | ReorderAt | Active | Created | OnHand* | StockValue* | SalePrice |
+
+| N | O | P | Q | R | S | T | U | V | W | X | Y |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| OnSale | Description | ImageID | ShipPrice | GuestPrice | Section | MemberOnly | BottleSize | PourOz | PoursPerBottle | PoursFromItem | PoursPerDrink |
 
 \* Formula columns — do not edit.
 
@@ -162,9 +170,9 @@ Send them the app link and install steps. To remove access, remove them in **Set
 |---|---|---|---|---|---|---|---|---|---|
 | EntryID | Timestamp | Type | SaleID | ItemID | ItemName | Category | Qty | Unit | Total |
 
-| K | L | M | N | O | P | Q | R | S | T | U |
-|---|---|---|---|---|---|---|---|---|---|---|
-| UnitCost | Payment | RecordedBy | Party | Note | VoidsEntry | Voided | ListPrice | PriceType | OnTab | EventID |
+| K | L | M | N | O | P | Q | R | S | T | U | V | W |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| UnitCost | Payment | RecordedBy | Party | Note | VoidsEntry | Voided | ListPrice | PriceType | OnTab | EventID | ShiftID | Section |
 
 Types: `sale`, `shipping`, `receive`, `adjust`, `loss`, `comp`, `payment` (tab payment), `income` / `expense` (event money; kind in `Category`: riders, passengers, fifty, basket, raffle, otherinc, payout, expense), `void`.
 Stock on hand = sum of `Qty` for non-voided entries.
@@ -182,6 +190,8 @@ Stock on hand = sum of `Qty` for non-voided entries.
 | `E4↓` | Role (`admin` / `user`) |
 
 **Events** — `EventID`, `Name`, `StartedAt`, `EndedAt`, `StartedBy`, `EndedBy`, `OpeningCash`, `ClosingCash`, `Notes`, `PricesJSON` (event price per item ID), `RiderFee`, `PassengerFee`. Only one event can run at a time. Price precedence: event price → sale price → regular.
+
+**Shifts** — `ShiftID`, `OpenedAt`, `ClosedAt`, `Bartender`, `OpenedBy`, `ClosedBy`, `OpeningCash`, `ClosingCash`, `EventID`, `Notes`. One shift open at a time; the bar cash box is separate from merch and event cash.
 
 **Images** — one row per picture (`ImageID`, base64 thumbnail ≤ ~45 KB, created, uploaded by).
 
