@@ -113,7 +113,11 @@ label{display:block;font-size:.9rem;color:var(--muted);margin:.6rem 0 .2rem}
 table{border-collapse:collapse;width:100%;font-size:.95rem}
 th,td{padding:.55rem .7rem;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle;white-space:nowrap}
 th{font-family:"Barlow Condensed",sans-serif;font-size:1rem;font-weight:600;color:var(--muted);background:var(--surface2);position:sticky;top:0}
-tr.low td{background:color-mix(in srgb,var(--warn) 12%,transparent)}
+tr.low td.qty-cell{box-shadow:inset 3px 0 0 var(--warn)}
+tr.out td.qty-cell{box-shadow:inset 3px 0 0 var(--bad)}
+td.qty-cell .n{font-variant-numeric:tabular-nums}
+td.qty-cell .n.low{color:var(--warn)}
+td.qty-cell .n.out{color:var(--bad);font-weight:700}
 @media (max-width:640px){.tb-x{display:none}}
 @media (min-width:641px){.tb-sub{display:none}}
 #lightbox{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.88);display:none;align-items:center;justify-content:center;flex-direction:column;padding:max(1rem,env(safe-area-inset-top)) 1rem max(1rem,env(safe-area-inset-bottom));cursor:zoom-out}
@@ -182,7 +186,7 @@ body.role-bar .bar-hide,body.role-bar .cost-col{display:none!important}
 .cashbox .tot{font-weight:700;border-top:1px solid var(--line);padding-top:.2rem}
 th.act,td.act{position:sticky;right:0;z-index:1;background:var(--surface);box-shadow:-8px 0 8px -8px rgba(0,0,0,.25);text-align:right}
 th.act{background:var(--surface2);z-index:2}
-tr.low td.act{background:color-mix(in srgb,var(--warn) 12%,var(--surface))}
+
 #rowmenu{display:none;position:fixed;z-index:25;min-width:190px;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.2);padding:.3rem}
 #rowmenu.on{display:block}
 #rowmenu button{display:block;width:100%;text-align:left;background:none;border:0;border-radius:6px;padding:.65rem .7rem;min-height:44px;cursor:pointer;font:inherit;color:inherit}
@@ -1667,7 +1671,7 @@ function renderStock(){
   const act=all.filter(i=>i.active!==false);
   let units=0,val=0,retail=0,lowN=0;
   let saleN=0;
-  for(const i of act){const oh=Math.max(0,onHand(i.id));units+=oh;val+=oh*num(i.cost);retail+=oh*effPrice(i);if(onHand(i.id)<=num(i.reorder))lowN++;if(isOnSale(i))saleN++}
+  for(const i of act){const oh=Math.max(0,onHand(i.id));units+=oh;val+=oh*num(i.cost);retail+=oh*effPrice(i);if(onHand(i.id)<=0||(num(i.reorder)>0&&onHand(i.id)<=num(i.reorder)))lowN++;if(isOnSale(i))saleN++}
   $('#st-stats').innerHTML=`
     <div class="card stat"><div class="v">${act.length}</div><div class="l">Active items</div></div>
     <div class="card stat"><div class="v">${units}</div><div class="l">Units on hand</div></div>
@@ -1675,11 +1679,12 @@ function renderStock(){
     <div class="card stat"><div class="v money">${money(retail)}</div><div class="l">Stock value at retail</div></div>
     <div class="card stat"><div class="v ${lowN?'neg':''}">${lowN}</div><div class="l">At or below reorder level</div></div>
     <div class="card stat"><div class="v">${saleN}</div><div class="l">Items on sale</div></div>`;
-  const rows=all.filter(i=>(arch||i.active!==false)&&(!cur||(cur==='__orphan'?!known.has(catKey(i.cat)):catKey(i.cat)===catKey(cur)))&&(!q||(label(i)+' '+(i.sku||'')).toLowerCase().includes(q))&&(!low||onHand(i.id)<=num(i.reorder))&&(!saleOnly||isOnSale(i))&&(!sect||(i.section||'merch')===sect));
+  const rows=all.filter(i=>(arch||i.active!==false)&&(!cur||(cur==='__orphan'?!known.has(catKey(i.cat)):catKey(i.cat)===catKey(cur)))&&(!q||(label(i)+' '+(i.sku||'')).toLowerCase().includes(q))&&(!low||(onHand(i.id)<=0||(num(i.reorder)>0&&onHand(i.id)<=num(i.reorder))))&&(!saleOnly||isOnSale(i))&&(!sect||(i.section||'merch')===sect));
   $('#st-body').innerHTML=rows.length?rows.map(i=>{
-    const oh=onHand(i.id),isLow=i.active!==false&&oh<=num(i.reorder);
-    return `<tr class="${isLow?'low':''}" data-id="${esc(i.id)}"><td><div class="itemcell"><span data-zoomrow="${esc(i.id)}">${thumb(i,hasImg(i)?'mini zoomable':'mini')}</span><div><button type="button" class="linkish" data-detail="${esc(i.id)}"><b>${esc(i.name)}</b></button>${i.sku?` <span class="muted">· ${esc(i.sku)}</span>`:''}${i.memberOnly?' <span class="evbadge">MEMBERS</span>':''}${i.section==='bar'?' <span class="tag">bar</span>':''}${i.active===false?' <span class="tag">archived</span>':''}${i.description?`<div class="desc">${esc(i.description)}</div>`:''}</div></div></td>
-    <td>${esc(i.cat)}</td><td>${esc(i.size)}</td><td class="num ${oh<0?'neg':''}"><b>${isPour(i)?`${Math.floor(Math.max(0,oh)/i.pours)} btl + ${Math.max(0,oh)%i.pours}`:oh}</b>${isPour(i)?`<div class="muted" style="font-size:.8rem">${oh} pours</div>`:''}${heldElsewhere(i.id)?`<div class="muted" style="font-size:.8rem">${heldElsewhere(i.id)} in carts</div>`:''}</td><td class="num">${num(i.reorder)}</td>
+    const oh=onHand(i.id),ro=num(i.reorder);
+    const isOut=i.active!==false&&oh<=0,isLow=i.active!==false&&!isOut&&ro>0&&oh<=ro;
+    return `<tr class="${isOut?'out':isLow?'low':''}" data-id="${esc(i.id)}"><td><div class="itemcell"><span data-zoomrow="${esc(i.id)}">${thumb(i,hasImg(i)?'mini zoomable':'mini')}</span><div><button type="button" class="linkish" data-detail="${esc(i.id)}"><b>${esc(i.name)}</b></button>${i.sku?` <span class="muted">· ${esc(i.sku)}</span>`:''}${i.memberOnly?' <span class="evbadge">MEMBERS</span>':''}${i.section==='bar'?' <span class="tag">bar</span>':''}${i.active===false?' <span class="tag">archived</span>':''}${i.description?`<div class="desc">${esc(i.description)}</div>`:''}</div></div></td>
+    <td>${esc(i.cat)}</td><td>${esc(i.size)}</td><td class="num qty-cell"><span class="n ${isOut?'out':isLow?'low':''}">${isPour(i)?`${Math.floor(Math.max(0,oh)/i.pours)} btl + ${Math.max(0,oh)%i.pours}`:oh}</span>${isPour(i)?`<div class="muted" style="font-size:.8rem">${oh} pours</div>`:''}${heldElsewhere(i.id)?`<div class="muted" style="font-size:.8rem">${heldElsewhere(i.id)} in carts</div>`:''}</td><td class="num">${num(i.reorder)}</td>
     <td class="num money">${priceHtml(i)}${isOnSale(i)&&num(i.salePrice)<num(i.cost)?'<div class="neg" style="font-size:.8rem">below cost</div>':''}</td><td class="num money cost-col">${money(num(i.cost))}</td><td class="num money cost-col">${money(Math.max(0,oh)*num(i.cost))}</td>
     <td class="admin-only act"><button class="btn sm" data-manage>Manage ▾</button></td></tr>`;
   }).join(''):`<tr><td colspan="9" class="empty">${S.items.size?'No items match.':'No items yet. Tap “Add item” to start.'}</td></tr>`;
@@ -2158,7 +2163,7 @@ function renderReports(){
   for(const e of sales){const k=e.itemId;byItem[k]=byItem[k]||{id:k,name:e.itemName,u:0,r:0,c:0};byItem[k].u-=num(e.qty);byItem[k].r+=num(e.total);byItem[k].c+=(-num(e.qty))*num(e.cost)}
   const top=Object.values(byItem).sort((a,b)=>b.r-a.r).slice(0,15);
   $('#rp-top').innerHTML=top.length?top.map(x=>`<tr><td>${S.items.has(x.id)?`<button type="button" class="linkish" data-detail="${esc(x.id)}"><b>${esc(x.name)}</b></button>`:esc(x.name)}</td><td class="num">${x.u}</td><td class="num money">${money(x.r)}</td><td class="num money">${money(x.r-x.c)}</td></tr>`).join(''):'<tr><td colspan="4" class="empty">No sales.</td></tr>';
-  const lows=activeItems().filter(i=>onHand(i.id)<=num(i.reorder)).sort((a,b)=>onHand(a.id)-onHand(b.id));
+  const lows=activeItems().filter(i=>onHand(i.id)<=0||(num(i.reorder)>0&&onHand(i.id)<=num(i.reorder))).sort((a,b)=>onHand(a.id)-onHand(b.id));
   $('#rp-low').innerHTML=lows.length?lows.map(i=>`<tr><td>${esc(label(i))}</td><td class="num ${onHand(i.id)<=0?'neg':''}">${onHand(i.id)}</td><td class="num">${num(i.reorder)}</td></tr>`).join(''):'<tr><td colspan="3" class="empty">Nothing below reorder level.</td></tr>';
   const sh={loss:{u:0,v:0},comp:{u:0,v:0},adjust:{u:0,v:0}};
   for(const e of es)if(sh[e.type]){sh[e.type].u+=num(e.qty);sh[e.type].v+=num(e.qty)*num(e.cost)}
