@@ -1814,7 +1814,7 @@ function itemModal(it){
     <div class="grow"><label for="f-size">Size / variant</label><input id="f-size" value="${esc(it.size||'')}" placeholder="e.g. XL, Chrome, 2026"></div></div>
     <div id="f-barbox"></div>
     <div class="row"><div class="grow"><label for="f-price" id="f-price-lbl">Sell price ($)</label><input id="f-price" type="number" step="0.01" min="0" value="${it.price!=null?it.price:''}"></div>
-    <div class="grow"><label for="f-cost">Unit cost ($)</label><input id="f-cost" type="number" step="0.01" min="0" value="${it.cost!=null?it.cost:''}"></div></div>
+    <div class="grow"><label for="f-cost" id="f-cost-lbl">Unit cost ($)</label><input id="f-cost" type="number" step="0.01" min="0" value="${num(it.pours)>0&&it.cost?r2(num(it.cost)*num(it.pours)):(it.cost!=null?it.cost:'')}"><div id="f-cost-hint" class="muted" style="font-size:.82rem"></div></div></div>
     <div class="row"><div class="grow"><label for="f-sale">Sale price ($)</label><input id="f-sale" type="number" step="0.01" min="0" value="${num(it.salePrice)>0?it.salePrice:''}" placeholder="e.g. 5.00"></div>
     <div class="grow"><label>&nbsp;</label><label class="row" style="color:var(--ink);margin:0;min-height:44px"><input type="checkbox" id="f-onsale" style="width:auto;min-height:0" ${it.onSale?'checked':''}> On sale now</label></div></div>
     <div class="row"><div class="grow"><label for="f-ship">Shipping per unit ($)</label><input id="f-ship" type="number" step="0.01" min="0" value="${num(it.shipPrice)>0?it.shipPrice:''}" placeholder="Leave blank if not shipped"></div><div class="grow"></div></div>
@@ -1849,12 +1849,21 @@ function itemModal(it){
           <p class="muted" style="font-size:.85rem">Stock is counted in pours — receive in bottles and the app converts.</p>`:''}
         ${btype==='mixed'?`<div class="row"><div class="grow"><label for="f-from">Pours from</label><select id="f-from">${liq.length?liq.map(z=>`<option value="${esc(z.id)}" ${it.poursFrom===z.id?'selected':''}>${esc(label(z))}</option>`).join(''):'<option value="">— add a spirits bottle first —</option>'}</select></div>
           <div class="grow"><label for="f-per">Pours per drink</label><input id="f-per" type="number" step="1" min="1" max="6" value="${num(it.poursPer)||1}"></div></div>`:''}`;
+      costUi();
       const bs=g('f-bsize'),poz=g('f-poz'),pr=g('f-pours');
-      if(bs){const calc=()=>{pr.value=Math.floor((OZ[bs.value]||0)/(num(poz.value)||1.5))};bs.onchange=calc;poz.oninput=calc;if(!num(pr.value))calc()}
+      if(bs){const calc=()=>{pr.value=Math.floor((OZ[bs.value]||0)/(num(poz.value)||1.5));costUi()};bs.onchange=calc;poz.oninput=calc;pr.oninput=costUi;if(!num(pr.value))calc()}
+      g('f-cost').oninput=costUi;
       md.querySelectorAll('#f-btype button').forEach(b=>b.onclick=()=>{btype=b.dataset.b;drawBar()});
     }
-    md.querySelector('#f-section').onclick=e=>{const b=e.target.closest('[data-s]');if(!b)return;section=b.dataset.s;drawBar()};
-    drawBar();
+    const poursNow=()=>(section==='bar'&&btype==='bottle'&&g('f-pours'))?Math.round(num(g('f-pours').value)):0;
+    function costUi(){
+      const n=poursNow();
+      g('f-cost-lbl').textContent=n?'Cost per bottle ($)':'Unit cost ($)';
+      const c=num(g('f-cost').value);
+      g('f-cost-hint').textContent=n&&c>0?`= ${money(r2(c/n))} per pour (${n} pours)`:'';
+    }
+    md.querySelector('#f-section').onclick=e=>{const b=e.target.closest('[data-s]');if(!b)return;section=b.dataset.s;drawBar();costUi()};
+    drawBar();costUi();
     const read=()=>({section:section,memberOnly:!!(g('f-memonly')&&g('f-memonly').checked),
       guestPrice:g('f-guest')?(g('f-guest').value===''?'':r2(num(g('f-guest').value))):'',
       bottleSize:(btype==='bottle'&&g('f-bsize'))?g('f-bsize').value:'',
@@ -1862,7 +1871,7 @@ function itemModal(it){
       pours:(btype==='bottle'&&g('f-pours'))?Math.round(num(g('f-pours').value)):'',
       poursFrom:(btype==='mixed'&&g('f-from'))?g('f-from').value:'',
       poursPer:(btype==='mixed'&&g('f-per'))?Math.round(num(g('f-per').value)):'',
-      name:g('f-name').value.trim(),cat:g('f-cat').value,size:g('f-size').value.trim(),price:r2(num(g('f-price').value)),cost:r2(num(g('f-cost').value)),reorder:Math.max(0,Math.round(num(g('f-reorder').value))),sku:g('f-sku').value.trim(),salePrice:g('f-sale').value===''?'':r2(num(g('f-sale').value)),shipPrice:g('f-ship').value===''?'':r2(num(g('f-ship').value)),onSale:g('f-onsale').checked,description:g('f-desc').value.trim()});
+      name:g('f-name').value.trim(),cat:g('f-cat').value,size:g('f-size').value.trim(),price:r2(num(g('f-price').value)),cost:(()=>{const n=poursNow(),c=r2(num(g('f-cost').value));return n>0?r2(c/n):c})(),reorder:Math.max(0,Math.round(num(g('f-reorder').value))),sku:g('f-sku').value.trim(),salePrice:g('f-sale').value===''?'':r2(num(g('f-sale').value)),shipPrice:g('f-ship').value===''?'':r2(num(g('f-ship').value)),onSale:g('f-onsale').checked,description:g('f-desc').value.trim()});
     g('f-file').onchange=async e=>{
       const f=e.target.files&&e.target.files[0];if(!f)return;
       g('f-pic-msg').textContent='Processing…';
