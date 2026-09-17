@@ -137,7 +137,7 @@ Send them the app link and install steps. To remove access, remove them in **Set
 
 | Change | Steps |
 |---|---|
-| `index.html` / app files | Upload to GitHub → bump `VERSION` in `sw.js` (e.g. `qm-v4` → `qm-v5`) → commit. Users close and reopen the app (twice if needed). |
+| `index.html` / app files | Upload to GitHub → bump `VERSION` in `sw.js` (e.g. `qm-v20` → `qm-v21`) → commit. The app detects the new version on next open and reloads itself ("App updated"). |
 | `Code.gs` | Save → **Deploy → Manage deployments →** select the API deployment → ✏️ → **Version: New version** → Deploy. URL does not change. |
 | New columns / sheets | Run **`setup`** again after pasting `Code.gs`. Safe to re-run; it never deletes data. |
 
@@ -197,7 +197,7 @@ Stock on hand = sum of `Qty` for non-voided entries.
 | "… is not authorized for the Quartermaster app" | Email not in **Settings → Users** (or typo). The message shows the signed-in email. |
 | "Server rejected sign-in: Server is missing OAUTH_CLIENT_ID" | Client ID not saved in `Code.gs`, or the API deployment wasn't updated to a **New version**. |
 | "Admins only" | Signed-in account has the `user` role. |
-| App still shows old version | Confirm `sw.js` `VERSION` was bumped; close/reopen the app; on PC press **Ctrl+F5**. |
+| App still shows old version | Confirm `sw.js` `VERSION` was bumped and the Pages build finished; close/reopen the app. |
 | Sign-in button does nothing | Allow pop-ups for the site. |
 | Server errors | Apps Script → **Executions** → latest `doPost` shows the error. |
 
