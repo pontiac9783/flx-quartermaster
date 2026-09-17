@@ -113,11 +113,11 @@ label{display:block;font-size:.9rem;color:var(--muted);margin:.6rem 0 .2rem}
 table{border-collapse:collapse;width:100%;font-size:.95rem}
 th,td{padding:.55rem .7rem;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle;white-space:nowrap}
 th{font-family:"Barlow Condensed",sans-serif;font-size:1rem;font-weight:600;color:var(--muted);background:var(--surface2);position:sticky;top:0}
-tr.low td.qty-cell{box-shadow:inset 3px 0 0 var(--warn)}
-tr.out td.qty-cell{box-shadow:inset 3px 0 0 var(--bad)}
+tr.low td.qty-cell{box-shadow:inset 2px 0 0 color-mix(in srgb,var(--warn) 45%,transparent)}
+tr.out td.qty-cell{box-shadow:inset 2px 0 0 color-mix(in srgb,var(--bad) 40%,transparent)}
 td.qty-cell .n{font-variant-numeric:tabular-nums}
 td.qty-cell .n.low{color:var(--warn)}
-td.qty-cell .n.out{color:var(--bad);font-weight:700}
+td.qty-cell .n.out{color:var(--bad);font-weight:600}
 @media (max-width:640px){.tb-x{display:none}}
 @media (min-width:641px){.tb-sub{display:none}}
 #lightbox{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.88);display:none;align-items:center;justify-content:center;flex-direction:column;padding:max(1rem,env(safe-area-inset-top)) 1rem max(1rem,env(safe-area-inset-bottom));cursor:zoom-out}
