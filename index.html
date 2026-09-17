@@ -113,11 +113,10 @@ label{display:block;font-size:.9rem;color:var(--muted);margin:.6rem 0 .2rem}
 table{border-collapse:collapse;width:100%;font-size:.95rem}
 th,td{padding:.55rem .7rem;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle;white-space:nowrap}
 th{font-family:"Barlow Condensed",sans-serif;font-size:1rem;font-weight:600;color:var(--muted);background:var(--surface2);position:sticky;top:0}
-tr.low td.qty-cell{box-shadow:inset 2px 0 0 color-mix(in srgb,var(--warn) 45%,transparent)}
-tr.out td.qty-cell{box-shadow:inset 2px 0 0 color-mix(in srgb,var(--bad) 40%,transparent)}
 td.qty-cell .n{font-variant-numeric:tabular-nums}
-td.qty-cell .n.low{color:var(--warn)}
-td.qty-cell .n.out{color:var(--bad);font-weight:600}
+td.qty-cell .flag{display:inline-block;margin-left:.35rem;padding:0 .35rem;border-radius:4px;font-size:.7rem;font-weight:700;letter-spacing:.03em;vertical-align:middle}
+td.qty-cell .flag.low{background:color-mix(in srgb,var(--warn) 22%,transparent);color:var(--warn)}
+td.qty-cell .flag.out{background:color-mix(in srgb,var(--bad) 18%,transparent);color:var(--bad)}
 @media (max-width:640px){.tb-x{display:none}}
 @media (min-width:641px){.tb-sub{display:none}}
 #lightbox{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.88);display:none;align-items:center;justify-content:center;flex-direction:column;padding:max(1rem,env(safe-area-inset-top)) 1rem max(1rem,env(safe-area-inset-bottom));cursor:zoom-out}
@@ -1684,7 +1683,7 @@ function renderStock(){
     const oh=onHand(i.id),ro=num(i.reorder);
     const isOut=i.active!==false&&oh<=0,isLow=i.active!==false&&!isOut&&ro>0&&oh<=ro;
     return `<tr class="${isOut?'out':isLow?'low':''}" data-id="${esc(i.id)}"><td><div class="itemcell"><span data-zoomrow="${esc(i.id)}">${thumb(i,hasImg(i)?'mini zoomable':'mini')}</span><div><button type="button" class="linkish" data-detail="${esc(i.id)}"><b>${esc(i.name)}</b></button>${i.sku?` <span class="muted">· ${esc(i.sku)}</span>`:''}${i.memberOnly?' <span class="evbadge">MEMBERS</span>':''}${i.section==='bar'?' <span class="tag">bar</span>':''}${i.active===false?' <span class="tag">archived</span>':''}${i.description?`<div class="desc">${esc(i.description)}</div>`:''}</div></div></td>
-    <td>${esc(i.cat)}</td><td>${esc(i.size)}</td><td class="num qty-cell"><span class="n ${isOut?'out':isLow?'low':''}">${isPour(i)?`${Math.floor(Math.max(0,oh)/i.pours)} btl + ${Math.max(0,oh)%i.pours}`:oh}</span>${isPour(i)?`<div class="muted" style="font-size:.8rem">${oh} pours</div>`:''}${heldElsewhere(i.id)?`<div class="muted" style="font-size:.8rem">${heldElsewhere(i.id)} in carts</div>`:''}</td><td class="num">${num(i.reorder)}</td>
+    <td>${esc(i.cat)}</td><td>${esc(i.size)}</td><td class="num qty-cell"><span class="n">${isPour(i)?`${Math.floor(Math.max(0,oh)/i.pours)} btl + ${Math.max(0,oh)%i.pours}`:oh}</span>${isOut?'<span class="flag out">OUT</span>':isLow?'<span class="flag low">LOW</span>':''}${isPour(i)?`<div class="muted" style="font-size:.8rem">${oh} pours</div>`:''}${heldElsewhere(i.id)?`<div class="muted" style="font-size:.8rem">${heldElsewhere(i.id)} in carts</div>`:''}</td><td class="num">${num(i.reorder)}</td>
     <td class="num money">${priceHtml(i)}${isOnSale(i)&&num(i.salePrice)<num(i.cost)?'<div class="neg" style="font-size:.8rem">below cost</div>':''}</td><td class="num money cost-col">${money(num(i.cost))}</td><td class="num money cost-col">${money(Math.max(0,oh)*num(i.cost))}</td>
     <td class="admin-only act"><button class="btn sm" data-manage>Manage ▾</button></td></tr>`;
   }).join(''):`<tr><td colspan="9" class="empty">${S.items.size?'No items match.':'No items yet. Tap “Add item” to start.'}</td></tr>`;
