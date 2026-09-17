@@ -2036,10 +2036,10 @@ function renderLedger(){
     const amt=e.type==='sale'||e.type==='payment'||e.type==='shipping'||e.type==='income'?e.total:(e.type==='receive'||e.type==='expense')?-e.total:null;
     const qty=e.type==='void'?'':`<span class="${e.qty>0?'pos':'neg'}">${e.qty>0?'+':''}${e.qty}</span>`;
     return `<tr class="${v?'voided':''}" data-id="${esc(e.id)}"><td>${d.toLocaleDateString()} <span class="muted">${d.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})}</span></td>
-    <td><span class="tag t-${esc(e.type)}">${TYPES[e.type]||esc(e.type)}</span>${e.event&&eventName(e.event)?`<div class="muted" style="font-size:.78rem">${esc(eventName(e.event))}</div>`:''}${e.shift?`<div class="muted" style="font-size:.78rem">${esc(shiftLabel(e.shift))}</div>`:''}</td>
-    <td class="wrap"><b>${esc(e.itemName)}</b>${e.note?`<div class="muted" style="font-size:.82rem">${esc(e.note)}</div>`:''}</td><td class="num">${qty}</td>
+    <td class="wrap"><span class="tag t-${esc(e.type)}">${TYPES[e.type]||esc(e.type)}</span>${e.note?`<div class="muted" style="font-size:.82rem">${esc(e.note)}</div>`:''}${e.shift?`<div class="muted" style="font-size:.78rem">${esc(shiftLabel(e.shift))}</div>`:''}</td>
+    <td class="wrap"><b>${esc(e.itemName)}</b></td><td class="num">${qty}</td>
     <td class="num money">${amt==null?'':`<span class="${amt>=0?'pos':'neg'}">${money(amt)}</span>`}${e.type==='sale'&&e.priceType==='sale'?' <span class="salebadge">SALE</span>':''}${e.type==='sale'&&e.priceType==='override'?' <span class="tag">override</span>':''}${isCharge(e)?' <span class="tag">on tab</span>':''}</td><td>${esc(e.pay)}</td>
-    <td class="wrap">${esc(e.party||'')}${v?' <span class="tag t-void">voided</span>':''}</td>
+    <td class="wrap">${esc(e.party||'')}${e.event&&eventName(e.event)?`<div class="muted" style="font-size:.82rem">${esc(eventName(e.event))}</div>`:''}${v?' <span class="tag t-void">voided</span>':''}</td>
     <td class="wrap">${esc(e.who)}</td>
     <td class="act"><div class="row" style="flex-wrap:nowrap;justify-content:flex-end">${e.type==='sale'&&!v&&e.sale&&firstOfSale[e.sale]===e.id&&!isCharge(e)&&!saleHasShipping(e.sale)?'<button class="btn sm" data-ship>Ship</button>':''}${(!v&&e.type!=='void')?'<button class="btn sm" data-void>Void</button>':''}</div></td></tr>`;
   };
@@ -2051,11 +2051,11 @@ function renderLedger(){
     const e=g.head,d=new Date(e.ts),open=S.lgOpen.has(g.round);
     const names=[...new Set(kids.map(k=>k.itemName))];
     return `<tr class="round-head" data-round="${esc(g.round)}"><td>${d.toLocaleDateString()} <span class="muted">${d.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})}</span></td>
-      <td><span class="tag t-sale">Bar round</span>${e.event&&eventName(e.event)?`<div class="muted" style="font-size:.78rem">${esc(eventName(e.event))}</div>`:''}${e.shift?`<div class="muted" style="font-size:.78rem">${esc(shiftLabel(e.shift))}</div>`:''}</td>
+      <td class="wrap"><span class="tag t-sale">Bar round</span>${e.shift?`<div class="muted" style="font-size:.78rem">${esc(shiftLabel(e.shift))}</div>`:''}</td>
       <td class="wrap"><span class="exp"><b>${open?'▾':'▸'} ${n} drink${n===1?'':'s'}</b></span>${comps?` <span class="tag">${comps} comp</span>`:''}<div class="muted" style="font-size:.82rem">${esc(names.slice(0,3).join(', '))}${names.length>3?'…':''}</div></td>
       <td class="num"><span class="neg">-${n}</span></td>
       <td class="num money"><span class="pos">${money(tot)}</span>${e.onTab?' <span class="tag">on tab</span>':''}</td>
-      <td>${esc(e.pay||'')}</td><td class="wrap">${esc(e.party||'')}</td><td class="wrap">${esc(e.who)}</td>
+      <td>${esc(e.pay||'')}</td><td class="wrap">${esc(e.party||'')}${e.event&&eventName(e.event)?`<div class="muted" style="font-size:.82rem">${esc(eventName(e.event))}</div>`:''}</td><td class="wrap">${esc(e.who)}</td>
       <td class="act"></td></tr>`+
       (open?kids.map(k=>{const h=rowHtml(k);return h.replace('<tr class="','<tr class="round-sub ').replace('<tr data-id','<tr class="round-sub" data-id')}).join(''):'');
   };
