@@ -15,6 +15,7 @@ Installable web app (PWA) for Android, iPhone/iPad and PC. Free to run.
 | **Shipping** | Optional per-item shipping rate. **Add shipping** in the cart (or **Add shipping to a past sale** / Ledger → **Ship** afterwards) suggests an editable amount and ship-to. Not allowed on Club Account (tab) sales. Recorded as a separate `shipping` ledger line with the same Sale ID, kept out of revenue/profit, included in takings. One shipping line per sale (void to change). |
 | **Cart holds** | Items in a cart are held for that device so two people can't sell the same last unit. Holds renew while the app is open and expire 10 minutes after it's closed; completing or clearing the sale releases them. |
 | **Tabs** | Club Account (member tab) charges, balances, partial/full payments, per-member history. |
+| **Item details** | Tap an item name (Stock, Reports → Top sellers): picture, price/cost/margin, on hand & held, days of stock left, sales this month / 30 days / all time, profit, 12-week trend, per-size breakdown, recent activity. |
 | **Stock** | Items with category, size/variant, auto SKU, price, cost, reorder level, picture, description. Receive, physical count, loss/damage, comp. |
 | **Sale pricing** | Per item or bulk (whole product / category). Regular price is kept; ending a sale restores it. |
 | **Ledger** | Append-only record of every sale, receipt, adjustment, tab payment. Mistakes are **voided**, never deleted. |
