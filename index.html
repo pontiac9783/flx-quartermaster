@@ -116,6 +116,16 @@ th{font-family:"Barlow Condensed",sans-serif;font-size:1rem;font-weight:600;colo
 tr.low td{background:color-mix(in srgb,var(--warn) 12%,transparent)}
 @media (max-width:640px){.tb-x{display:none}}
 @media (min-width:641px){.tb-sub{display:none}}
+#lightbox{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.88);display:none;align-items:center;justify-content:center;flex-direction:column;padding:max(1rem,env(safe-area-inset-top)) 1rem max(1rem,env(safe-area-inset-bottom));cursor:zoom-out}
+#lightbox.on{display:flex}
+#lightbox img{width:min(100%,640px);height:auto;max-height:78vh;object-fit:contain;border-radius:8px;background:#fff;box-shadow:0 10px 40px rgba(0,0,0,.5)}
+#lightbox .cap{color:#fff;text-align:center;margin-top:.8rem;max-width:640px}
+#lightbox .cap b{font-family:"Barlow Condensed",sans-serif;font-size:1.4rem}
+#lightbox .cap .d{opacity:.8;font-size:.95rem;margin-top:.2rem;white-space:pre-line}
+#lightbox .lbx{position:absolute;top:max(.8rem,env(safe-area-inset-top));right:.8rem;width:44px;height:44px;border-radius:50%;border:0;background:rgba(255,255,255,.15);color:#fff;font-size:1.3rem;cursor:pointer}
+.thumbwrap{position:relative;display:block}
+.zoom{position:absolute;right:.35rem;bottom:.7rem;width:34px;height:34px;border-radius:50%;background:rgba(0,0,0,.55);color:#fff;display:flex;align-items:center;justify-content:center;font-size:1rem;cursor:zoom-in;z-index:1}
+img.thumb.zoomable,#f-pic img{cursor:zoom-in}
 th.act,td.act{position:sticky;right:0;z-index:1;background:var(--surface);box-shadow:-8px 0 8px -8px rgba(0,0,0,.25);text-align:right}
 th.act{background:var(--surface2);z-index:2}
 tr.low td.act{background:color-mix(in srgb,var(--warn) 12%,var(--surface))}
@@ -337,6 +347,7 @@ body.role-user .admin-only{display:none!important}
 <div id="ov"><div id="md"></div></div>
 <div id="toast"></div>
 <div id="rowmenu" role="menu"></div>
+<div id="lightbox" role="dialog" aria-modal="true" aria-label="Picture"><button type="button" class="lbx" aria-label="Close">✕</button><img alt=""><div class="cap"></div></div>
 
 <script>
 (function(){
@@ -527,12 +538,23 @@ function thumb(i,extra){
   const ini=String(i&&i.name||'?').split(/\s+/).filter(Boolean).slice(0,2).map(w=>w[0]).join('').toUpperCase();
   return `<div class="thumb ph ${extra||''}">${esc(ini)}</div>`;
 }
+const hasImg=i=>!!(i&&i.imageId&&S.images.get(i.imageId));
+function openLightbox(src,it){
+  if(!src)return;
+  const lb=$('#lightbox');
+  lb.querySelector('img').src=src;
+  lb.querySelector('.cap').innerHTML=it?`<b>${esc(label(it))}</b>${it.price!=null?` · ${money(effPrice(it))}`:''}${it.description?`<div class="d">${esc(it.description)}</div>`:''}`:'';
+  lb.classList.add('on');
+}
+function closeLightbox(){const lb=$('#lightbox');lb.classList.remove('on');lb.querySelector('img').removeAttribute('src')}
+$('#lightbox').addEventListener('click',closeLightbox);
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('#lightbox').classList.contains('on')){e.preventDefault();e.stopImmediatePropagation();closeLightbox()}},true);
 function shrinkImage(file){
   return new Promise((res,rej)=>{
     const url=URL.createObjectURL(file),img=new Image();
     img.onload=()=>{
       URL.revokeObjectURL(url);
-      let size=320,q=.82,out='';
+      let size=640,q=.8,out='';
       for(let n=0;n<12;n++){
         const k=Math.min(1,size/Math.max(img.naturalWidth,img.naturalHeight));
         const c=document.createElement('canvas');c.width=Math.max(1,Math.round(img.naturalWidth*k));c.height=Math.max(1,Math.round(img.naturalHeight*k));
@@ -644,7 +666,7 @@ function renderSell(){
     const oh=onHand(i.id),hl=heldElsewhere(i.id),av=oh-hl;
     const cls=av<=0?'out':(av<=num(i.reorder)?'low':'');
     const sale=isOnSale(i),blocked=hl>0&&av<=0&&!S.cart.has(i.id);
-    return `<button class="tile ${S.cart.has(i.id)?'incart':''} ${sale?'onsale':''} ${blocked?'held':''}" data-id="${esc(i.id)}" title="${esc(i.description||'')}">${sale?'<span class="salebadge">SALE</span>':''}<span class="qty ${cls}">${blocked?'In another cart':`${Math.max(av,oh>0?0:oh)} left`}</span>${thumb(i)}<b>${esc(i.name)}</b><span class="sz">${esc(i.size||i.cat||'')}${hl>0?` <span class="muted">· ${hl} in other cart${hl===1?'':'s'}</span>`:''}</span><span class="pr money">${money(effPrice(i))}${sale?`<span class="was">${money(num(i.price))}</span>`:''}</span></button>`;
+    return `<button class="tile ${S.cart.has(i.id)?'incart':''} ${sale?'onsale':''} ${blocked?'held':''}" data-id="${esc(i.id)}" title="${esc(i.description||'')}">${sale?'<span class="salebadge">SALE</span>':''}<span class="qty ${cls}">${blocked?'In another cart':`${Math.max(av,oh>0?0:oh)} left`}</span><span class="thumbwrap">${thumb(i)}${hasImg(i)?`<span class="zoom" data-zoom="${esc(i.id)}" role="button" aria-label="View picture" title="View picture">⤢</span>`:''}</span><b>${esc(i.name)}</b><span class="sz">${esc(i.size||i.cat||'')}${hl>0?` <span class="muted">· ${hl} in other cart${hl===1?'':'s'}</span>`:''}</span><span class="pr money">${money(effPrice(i))}${sale?`<span class="was">${money(num(i.price))}</span>`:''}</span></button>`;
   }).join('')+(hidden?`<div class="empty" style="grid-column:1/-1;padding:.8rem">${hidden} out-of-stock item${hidden===1?'':'s'} hidden</div>`:'')
   :`<div class="empty">${!S.items.size?'No items yet — add some on the Stock tab.':hidden?`Nothing in stock here. ${hidden} out-of-stock item${hidden===1?' is':'s are'} hidden — tick “Show out of stock”.`:'No items match.'}</div>`;
   renderCart();
@@ -689,6 +711,8 @@ $('#s-oos').checked=store('qm_oos')==='1';
 $('#s-oos').addEventListener('change',()=>{store('qm_oos',$('#s-oos').checked?'1':'0');renderSell()});
 $('#s-cats').addEventListener('click',e=>{const b=e.target.closest('[data-c]');if(!b)return;S.cat=b.dataset.c;renderSell()});
 $('#s-tiles').addEventListener('click',e=>{
+  const z=e.target.closest('[data-zoom]');
+  if(z){e.stopPropagation();const it=S.items.get(z.dataset.zoom);if(it)openLightbox(S.images.get(it.imageId),it);return}
   const b=e.target.closest('.tile');if(!b)return;
   const it=S.items.get(b.dataset.id);if(!it)return;
   const l=S.cart.get(it.id),next=(l?l.qty:0)+1,hl=heldElsewhere(it.id);
@@ -891,7 +915,7 @@ function renderStock(){
   const rows=all.filter(i=>(arch||i.active!==false)&&(!cur||(cur==='__orphan'?!known.has(catKey(i.cat)):catKey(i.cat)===catKey(cur)))&&(!q||(label(i)+' '+(i.sku||'')).toLowerCase().includes(q))&&(!low||onHand(i.id)<=num(i.reorder))&&(!saleOnly||isOnSale(i)));
   $('#st-body').innerHTML=rows.length?rows.map(i=>{
     const oh=onHand(i.id),isLow=i.active!==false&&oh<=num(i.reorder);
-    return `<tr class="${isLow?'low':''}" data-id="${esc(i.id)}"><td><div class="itemcell">${thumb(i,'mini')}<div><b>${esc(i.name)}</b>${i.sku?` <span class="muted">· ${esc(i.sku)}</span>`:''}${i.active===false?' <span class="tag">archived</span>':''}${i.description?`<div class="desc">${esc(i.description)}</div>`:''}</div></div></td>
+    return `<tr class="${isLow?'low':''}" data-id="${esc(i.id)}"><td><div class="itemcell"><span data-zoomrow="${esc(i.id)}">${thumb(i,hasImg(i)?'mini zoomable':'mini')}</span><div><b>${esc(i.name)}</b>${i.sku?` <span class="muted">· ${esc(i.sku)}</span>`:''}${i.active===false?' <span class="tag">archived</span>':''}${i.description?`<div class="desc">${esc(i.description)}</div>`:''}</div></div></td>
     <td>${esc(i.cat)}</td><td>${esc(i.size)}</td><td class="num ${oh<0?'neg':''}"><b>${oh}</b>${heldElsewhere(i.id)?`<div class="muted" style="font-size:.8rem">${heldElsewhere(i.id)} in carts</div>`:''}</td><td class="num">${num(i.reorder)}</td>
     <td class="num money">${priceHtml(i)}${isOnSale(i)&&num(i.salePrice)<num(i.cost)?'<div class="neg" style="font-size:.8rem">below cost</div>':''}</td><td class="num money">${money(num(i.cost))}</td><td class="num money">${money(Math.max(0,oh)*num(i.cost))}</td>
     <td class="admin-only act"><button class="btn sm" data-manage>Manage ▾</button></td></tr>`;
@@ -921,6 +945,8 @@ window.addEventListener('scroll',placeRowMenu,true);
 window.addEventListener('resize',closeRowMenu);
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeRowMenu()});
 $('#st-body').addEventListener('click',e=>{
+  const z=e.target.closest('[data-zoomrow]');
+  if(z){const it=S.items.get(z.dataset.zoomrow);if(hasImg(it))openLightbox(S.images.get(it.imageId),it);return}
   if(!isAdmin())return;
   const b=e.target.closest('[data-manage]');if(!b)return;
   const it=S.items.get(b.closest('tr').dataset.id);if(!it)return;
@@ -977,6 +1003,7 @@ function itemModal(it){
       catch(err){g('f-pic-msg').textContent=err.message}
       e.target.value='';
     };
+    g('f-pic').onclick=()=>{const im=g('f-pic').querySelector('img');if(im)openLightbox(im.src,{name:g('f-name').value||'Picture',size:g('f-size').value,description:g('f-desc').value})};
     g('f-pic-rm').onclick=()=>{pic='';g('f-pic').innerHTML=thumb({name:g('f-name').value});g('f-pic-rm').style.display='none';g('f-pic-lbl').textContent='Add picture';g('f-pic-msg').textContent='Picture will be removed'};
     md.querySelector('[data-x]').onclick=closeModal;
     md.querySelector('[data-ok]').onclick=async()=>{
