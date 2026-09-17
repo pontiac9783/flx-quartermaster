@@ -433,6 +433,12 @@ body.role-user .admin-only{display:none!important}
         <div class="row" style="margin-top:.6rem"><input id="se-newuser" class="grow" type="email" placeholder="member@gmail.com" autocomplete="off"><select id="se-newrole" style="width:auto"><option value="user">User</option><option value="bar">Bar tablet</option><option value="admin">Admin</option></select><button class="btn" id="se-adduser">Add</button></div>
         <p class="muted" style="font-size:.85rem">New people must also be added in Google Cloud → Audience → Test users before they can sign in.</p>
       </div>
+      <div class="card admin-only" id="se-danger" style="border-color:var(--bad)">
+        <h3 style="color:var(--bad)">Danger zone</h3>
+        <p class="muted" style="margin-top:0">Clears history so you can start fresh after testing. Settings, members, users and roles are kept.</p>
+        <button class="btn" id="se-reset" style="color:var(--bad);border-color:var(--bad)">Reset data…</button>
+        <p class="muted" style="font-size:.85rem">Owner only. Make a copy of the Sheet first if you want a backup (File → Make a copy).</p>
+      </div>
       <div class="card">
         <h3>This device</h3>
         <label for="se-who">Display name (added to your Google email on every entry)</label><input id="se-who">
@@ -2459,6 +2465,48 @@ async function signOut(){
   showSignin('Signed out.');
 }
 $('#se-signout').onclick=()=>{if(S.cart.size&&!confirm('Sign out and clear your current cart?'))return;signOut()};
+$('#se-reset').onclick=()=>resetModal();
+function resetModal(){
+  if(String(S.email||'').toLowerCase()!==String(S.owner||'').toLowerCase()){toast('Only the Sheet owner can reset data',5000);return}
+  const counts={
+    ledger:S.entries.filter(e=>!e.pending).length,
+    shifts:(S.shifts||[]).length,
+    events:(S.events||[]).length,
+    images:new Set([...S.items.values()].map(i=>i.imageId).filter(Boolean)).size,
+    items:S.items.size
+  };
+  const row=(k,label,note)=>`<label class="row" style="color:var(--ink);margin:.1rem 0"><input type="checkbox" data-part="${k}" style="width:auto;min-height:0" ${k==='items'?'':'checked'}> ${label} <span class="muted">· ${counts[k]} ${note||''}</span></label>`;
+  openModal(`<h3 style="color:var(--bad)">Reset data</h3>
+    <p style="margin-top:0">This permanently deletes the rows below from the spreadsheet. There is no undo inside the app.</p>
+    ${row('ledger','Ledger — every sale, drink, receipt, payment','entries')}
+    ${row('shifts','Bar shifts','shifts')}
+    ${row('events','Events','events')}
+    ${row('images','Item pictures','pictures')}
+    ${row('items','Items themselves (prices, costs, settings per item)','items')}
+    <p class="muted" style="font-size:.85rem">Club settings, categories, payment methods, members, users and roles are always kept.</p>
+    <label for="rs-phrase">Type <b>RESET DATA</b> to enable</label><input id="rs-phrase" autocomplete="off" placeholder="RESET DATA">
+    <div class="row" style="margin-top:1rem;justify-content:flex-end"><button class="btn" data-x>Cancel</button><button class="btn pri" data-ok disabled style="background:var(--bad);border-color:var(--bad)">Reset</button></div>`,md=>{
+    const ph=md.querySelector('#rs-phrase'),ok=md.querySelector('[data-ok]');
+    ph.addEventListener('input',()=>{ok.disabled=ph.value.trim().toUpperCase()!=='RESET DATA'});
+    md.querySelector('[data-x]').onclick=closeModal;
+    ok.onclick=async()=>{
+      const parts={};md.querySelectorAll('[data-part]').forEach(c=>{if(c.checked)parts[c.dataset.part]=true});
+      const picked=Object.keys(parts);
+      if(!picked.length){toast('Pick what to clear');return}
+      const n=picked.reduce((s,k)=>s+counts[k],0);
+      if(!confirm(`Delete ${n} rows (${picked.join(', ')})?\n\nThis cannot be undone from the app.`))return;
+      if(!confirm('Last check — reset now?'))return;
+      ok.disabled=true;ok.textContent='Resetting…';
+      try{
+        const res=await call('resetData',{name:who(),confirm:'RESET DATA',parts});
+        if(res.data)apply(res.data);
+        S.tmp=[];S.bar.round=[];S.bar.last=null;S.cart.clear();S.pendDec={};
+        closeModal();refresh();
+        toast('Reset done · '+(res.cleared||[]).join(', '),7000);
+      }catch(e){toast('Not reset: '+friendly(e),6000);ok.disabled=false;ok.textContent='Reset'}
+    };
+  });
+}
 $('#se-save-me').onclick=()=>{store('qm_who',$('#se-who').value.trim());store('qm_theme',$('#se-theme').value);applyTheme();showWho();toast('Saved on this device')};
 
 function fillMembers(){
