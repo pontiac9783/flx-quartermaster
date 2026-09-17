@@ -311,13 +311,21 @@ body.role-user .admin-only{display:none!important}
   <section id="v-bar">
     <div class="barhead">
       <div class="seg" id="bar-who"><button data-w="member" class="on">Member</button><button data-w="guest">Guest</button></div>
-      <button class="btn" id="bar-tab">Walk-up</button>
       <button class="btn" id="bar-comp">Comp: off</button>
       <div class="grow"></div>
       <div class="bartotals"><span><span class="v money" id="bar-total">$0.00</span> <span class="muted" id="bar-count">0 drinks</span></span></div>
     </div>
     <div class="chips" id="bar-cats"></div>
     <div class="bargrid" id="bar-grid"></div>
+    <div id="bar-round" class="card" style="margin-top:.8rem;display:none">
+      <div class="row" style="justify-content:space-between;align-items:baseline">
+        <h3 style="margin:0">This round <span class="muted" id="br-count"></span></h3>
+        <span class="v money" id="br-total" style="font-family:'Barlow Condensed',sans-serif;font-size:1.6rem;font-weight:700"></span>
+      </div>
+      <div id="br-items" style="display:flex;gap:.4rem;flex-wrap:wrap;margin:.5rem 0"></div>
+      <div class="muted" style="font-size:.9rem">Charge to:</div>
+      <div class="row" style="gap:.45rem;margin-top:.35rem" id="br-pay"></div>
+    </div>
     <div id="bar-last"></div>
     <div class="pad-bottom"></div>
   </section>
@@ -517,7 +525,7 @@ async function callNow(fn,arg){
 const S={
   items:new Map(),entries:[],stock:{},voided:new Set(),email:'',url:'#',
   settings:{club:'Quartermaster',cats:[],pays:[]},
-  images:new Map(),member:'',held:{},events:[],activeEvent:null,shifts:[],shift:null,tmp:[],bar:{guest:false,comp:false,party:'',cat:'',queue:[],flushT:0,sending:false},pending:0,pendDec:{},ship:{on:false,manual:false},users:[],role:'',owner:'',imgPending:new Set(),cart:new Map(),pay:null,cat:'',view:'sell',busy:false,loaded:false
+  images:new Map(),member:'',held:{},events:[],activeEvent:null,shifts:[],shift:null,tmp:[],bar:{guest:false,comp:false,compReason:'',cat:'',round:[],last:null},pending:0,pendDec:{},ship:{on:false,manual:false},users:[],role:'',owner:'',imgPending:new Set(),cart:new Map(),pay:null,cat:'',view:'sell',busy:false,loaded:false
 };
 const TYPES={sale:'Sale',shipping:'Shipping',payment:'Tab payment',income:'Event income',expense:'Cost / payout',receive:'Received',adjust:'Count adj.',loss:'Loss / damage',comp:'Comp / give-away',void:'Void'};
 
@@ -1049,9 +1057,8 @@ async function syncCart(){
   finally{syncing=false;if(syncAgain){syncAgain=false;syncCartSoon()}}
 }
 setInterval(()=>{if(S.cart.size&&!document.hidden)syncCart()},60000);
-document.addEventListener('visibilitychange',()=>{if(!document.hidden&&S.cart.size)syncCart();if(S.bar.queue.length)flushBar()});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&S.cart.size)syncCart()});
 window.addEventListener('pagehide',()=>{
-  if(S.bar.queue.length)flushBar();
   if(!S.cart.size||!tokenValid()||!navigator.sendBeacon||!CFG.API_URL)return;
   try{navigator.sendBeacon(CFG.API_URL,new Blob([JSON.stringify({fn:'syncCart',arg:{lines:[]},idToken:AUTH.token,session:SESSION})],{type:'text/plain;charset=utf-8'}))}catch(e){}
 });
@@ -1251,7 +1258,7 @@ function levelText(i){
 function barShiftEntries(){return S.shift?live().filter(e=>e.shift===S.shift.id):[]}
 function renderBarBar(){
   const bar=$('#barbar');
-  if(!S.loaded||S.role==='' ){bar.className='';return}
+  if(!S.loaded||!S.role){bar.className='';return}
   if(S.shift){
     const es=barShiftEntries(),tot=es.filter(e=>e.type==='sale').reduce((s,e)=>s+num(e.total),0);
     bar.className='on';
@@ -1259,18 +1266,17 @@ function renderBarBar(){
     $('#bar-close').onclick=()=>shiftModal(S.shift);
   }else if(S.view==='bar'){
     bar.className='on';
-    bar.innerHTML='<span class="muted">Bar closed — drinks aren’t counted on a shift</span><button class="btn sm" id="bar-open">Open bar</button>';
+    bar.innerHTML='<span class="muted">Bar closed — drinks aren\u2019t counted on a shift</span><button class="btn sm" id="bar-open">Open bar</button>';
     $('#bar-open').onclick=()=>shiftModal(null);
   }else bar.className='';
 }
 function renderBar(){
-  const used=new Set(barItems().map(i=>catKey(i.cat)).filter(Boolean));
-  const cats=[...catsFor('bar'),...[...new Set(barItems().map(i=>i.cat))].filter(c=>c&&!catsFor('bar').some(x=>catKey(x)===catKey(c)))];
+  const known=catsFor('bar');
+  const extra=[...new Set(barItems().map(i=>i.cat))].filter(c=>c&&!known.some(x=>catKey(x)===catKey(c)));
+  const cats=[...known,...extra];
   if(S.bar.cat&&!cats.some(c=>catKey(c)===catKey(S.bar.cat)))S.bar.cat='';
-  $('#bar-cats').innerHTML=['',...cats].map(c=>`<button class="chip ${S.bar.cat===c?'on':''}" data-c="${esc(c)}">${c?esc(c):'All'}</button>`).join('');
+  $('#bar-cats').innerHTML=['',...cats].map(c=>`<button class="chip ${catKey(S.bar.cat)===catKey(c)?'on':''}" data-c="${esc(c)}">${c?esc(c):'All'}</button>`).join('');
   $('#bar-who').querySelectorAll('button').forEach(b=>b.classList.toggle('on',(b.dataset.w==='guest')===S.bar.guest));
-  $('#bar-tab').textContent=S.bar.party?`Tab: ${S.bar.party}`:'Walk-up';
-  $('#bar-tab').classList.toggle('pri',!!S.bar.party);
   $('#bar-comp').textContent=S.bar.comp?'Comp: ON':'Comp: off';
   $('#bar-comp').classList.toggle('pri',S.bar.comp);
   const list=barItems().filter(i=>!S.bar.cat||catKey(i.cat)===catKey(S.bar.cat)).sort(itemCmp);
@@ -1278,66 +1284,86 @@ function renderBar(){
     const l=levelText(i);
     return `<button class="drink ${l.n<=0?'dim':''}" data-id="${esc(i.id)}"><span class="lvl ${l.n<=0?'out':l.low?'low':''}">${esc(l.txt)}</span><b>${esc(i.name)}</b><span class="muted" style="font-size:.85rem">${esc(i.size||i.cat||'')}</span><span class="amt">${money(barPrice(i))}</span></button>`;
   }).join('')+`<button class="drink quick" data-quick><b>+ Quick item</b><span class="muted" style="font-size:.85rem">name &amp; amount</span></button>`;
+  renderRound();
+}
+function roundTotal(){return r2(S.bar.round.reduce((s,r)=>s+(r.comp?0:r.price),0))}
+function renderRound(){
+  const box=$('#bar-round'),n=S.bar.round.length;
+  box.style.display=n?'':'none';
+  if(n){
+    $('#br-count').textContent=`· ${n} drink${n===1?'':'s'}${S.bar.guest?' · guest prices':''}`;
+    $('#br-total').textContent=money(roundTotal());
+    $('#br-items').innerHTML=S.bar.round.map(r=>`<span class="lastchip"><span>${esc(r.name)}${r.comp?' (comp)':' '+money(r.price)}</span><button data-drop="${esc(r.tmp)}" aria-label="Remove">✕</button></span>`).join('');
+    const cash=(S.settings.pays||[]).find(p=>p.trim().toLowerCase()==='cash')||(S.settings.pays||[])[0]||'Cash';
+    const roster=S.settings.members||[];
+    $('#br-pay').innerHTML=`<button class="btn pri mbtn" style="min-width:9rem" data-pay="${esc(cash)}">💵 Cash</button>`+
+      roster.map(m=>`<button class="btn mbtn" data-tab="${esc(m)}">${esc(m)}</button>`).join('')+
+      `<button class="btn mbtn" data-tab="">Other name…</button>`;
+  }
   renderBarTotals();
 }
 function renderBarTotals(){
   const es=barShiftEntries();
   const sales=es.filter(e=>e.type==='sale'),drinks=es.filter(e=>e.type==='sale'||e.type==='comp');
-  const tot=sales.reduce((s,e)=>s+num(e.total),0);
-  $('#bar-total').textContent=money(tot);
-  const n=drinks.length;
-  $('#bar-count').textContent=`${n} drink${n===1?'':'s'}${S.bar.party?` · tab ${esc(S.bar.party)}`:''}`;
-  const last=es.slice(0,10);
-  $('#bar-last').innerHTML=last.map(e=>`<span class="lastchip ${e.pending?'pend':''}"><span>${esc(e.itemName)}${e.type==='comp'?' (comp)':''} ${e.type==='comp'?'':money(num(e.total))}</span><button data-undo="${esc(e.id)}" title="Remove" aria-label="Remove">✕</button></span>`).join('');
+  $('#bar-total').textContent=money(sales.reduce((s,e)=>s+num(e.total),0));
+  $('#bar-count').textContent=`${drinks.length} drink${drinks.length===1?'':'s'} tonight`;
+  const last=S.bar.last;
+  $('#bar-last').innerHTML=last?`<span class="lastchip"><span>Last: ${esc(last.label)}</span><button data-undolast aria-label="Undo">↺</button></span>`:'';
   renderBarBar();
 }
 function barTap(i,opts){
   opts=opts||{};
-  const comp=S.bar.comp,tid=stockTargetId(i);
-  const per=(i.poursFrom&&S.items.has(i.poursFrom))?Math.max(1,i.poursPer||1):1;
+  const comp=S.bar.comp;
   const price=comp?0:(opts.price!=null?opts.price:barPrice(i));
-  const pay=S.bar.party?(S.settings.memberPays[0]||'Club Account'):(S.settings.pays.find(p=>p.trim().toLowerCase()==='cash')||S.settings.pays[0]||'Cash');
-  const e={id:'tmp'+Math.random().toString(36).slice(2,9),ts:Date.now(),type:comp?'comp':'sale',
-    itemId:opts.quick?'':tid,itemName:opts.quick?opts.quick.name:label(i),cat:opts.quick?(opts.quick.cat||'Bar'):i.cat,
-    qty:opts.quick?-1:-per,unit:price,total:r2(price),cost:0,pay:comp?'':pay,who:who(),party:S.bar.party,
-    note:comp?(opts.reason||'comp'):'',section:'bar',shift:S.shift?S.shift.id:'',onTab:!comp&&!!S.bar.party,
-    priceType:comp?'comp':(S.bar.guest?'guest':'member'),pending:true};
-  S.tmp.push(e);S.entries.unshift(e);
-  if(e.itemId)S.stock[e.itemId]=(S.stock[e.itemId]||0)+e.qty;
-  S.bar.queue.push({tmpId:e.id,line:opts.quick?{quick:opts.quick,qty:1,price:price,comp:comp,reason:e.note}:{id:i.id,qty:1,price:price,comp:comp,reason:e.note},
-    pay:e.pay,party:e.party,guest:S.bar.guest});
-  renderBarTotals();
-  const row=$('#bar-grid').querySelector(`[data-id="${e.itemId||'__'}"]`);
-  if(row&&!opts.quick){const l=levelText(i),sp=row.querySelector('.lvl');sp.textContent=l.txt;sp.className='lvl '+(l.n<=0?'out':l.low?'low':'');row.classList.toggle('dim',l.n<=0)}
-  scheduleBarFlush(S.bar.queue.length>=6?0:2000);
+  S.bar.round.push({tmp:'r'+Math.random().toString(36).slice(2,9),id:i?i.id:'',quick:opts.quick||null,
+    name:opts.quick?opts.quick.name:label(i),price:price,comp:comp,reason:comp?(opts.reason||'comp'):''});
+  renderRound();
 }
-function scheduleBarFlush(ms){clearTimeout(S.bar.flushT);S.bar.flushT=setTimeout(flushBar,ms)}
-async function flushBar(){
-  if(S.bar.sending||!S.bar.queue.length)return;
-  if(!navigator.onLine||!tokenValid()){scheduleBarFlush(4000);return}
-  const first=S.bar.queue[0];
-  const batch=[];
-  while(S.bar.queue.length&&batch.length<25){
-    const q=S.bar.queue[0];
-    if(q.pay!==first.pay||q.party!==first.party||q.guest!==first.guest)break;
-    batch.push(S.bar.queue.shift());
-  }
-  S.bar.sending=true;
+async function chargeRound(pay,party){
+  if(!S.bar.round.length)return;
+  const round=S.bar.round.slice();
+  const guest=S.bar.guest;
+  const tmpEntries=round.map(r=>{
+    const it=r.id?S.items.get(r.id):null;
+    const tid=it?stockTargetId(it):'';
+    const per=(it&&it.poursFrom&&S.items.has(it.poursFrom))?Math.max(1,it.poursPer||1):1;
+    return {id:'tmp'+Math.random().toString(36).slice(2,9),ts:Date.now(),type:r.comp?'comp':'sale',
+      itemId:tid,itemName:r.name,cat:it?it.cat:'Bar',qty:it?-per:-1,unit:r.price,total:r2(r.comp?0:r.price),cost:0,
+      pay:r.comp?'':pay,who:who(),party:party||'',note:r.reason,section:'bar',shift:S.shift?S.shift.id:'',
+      onTab:!r.comp&&!!party,priceType:r.comp?'comp':(guest?'guest':'member'),pending:true};
+  });
+  S.bar.round=[];
+  S.tmp.push(...tmpEntries);S.entries=tmpEntries.concat(S.entries);
+  recomputeStock();renderBar();
+  const total=money(r2(round.reduce((s,r)=>s+(r.comp?0:r.price),0)));
+  const label0=`${round.length} drink${round.length===1?'':'s'} · ${total} · ${party||pay}`;
+  toast(`${party?'On '+party+"'s tab":pay} · ${total}`,2500);
   try{
-    const res=await call('recordBarDrinks',{name:who(),pay:first.pay,party:first.party,guest:first.guest,lines:batch.map(b=>b.line)});
-    const ids=new Set(batch.map(b=>b.tmpId));
+    const res=await call('recordBarDrinks',{name:who(),pay:pay,party:party||'',guest:guest,
+      lines:round.map(r=>r.quick?{quick:r.quick,qty:1,price:r.price,comp:r.comp,reason:r.reason}:{id:r.id,qty:1,price:r.price,comp:r.comp,reason:r.reason})});
+    const ids=new Set(tmpEntries.map(e=>e.id));
     S.tmp=S.tmp.filter(e=>!ids.has(e.id));
     S.entries=S.entries.filter(e=>!ids.has(e.id)).concat(res.added||[]).sort((a,b)=>b.ts-a.ts);
-    recomputeStock();
-    if(S.view==='bar')renderBar();
+    S.bar.last={label:label0,ids:(res.added||[]).map(e=>e.id)};
+    recomputeStock();if(S.view==='bar')renderBar();
   }catch(err){
-    batch.reverse().forEach(b=>S.bar.queue.unshift(b));
-    toast('Bar not saved yet: '+friendly(err)+' — will retry',5000);
-    scheduleBarFlush(6000);
-  }finally{
-    S.bar.sending=false;
-    if(S.bar.queue.length)scheduleBarFlush(600);
+    const ids=new Set(tmpEntries.map(e=>e.id));
+    S.tmp=S.tmp.filter(e=>!ids.has(e.id));S.entries=S.entries.filter(e=>!ids.has(e.id));
+    S.bar.round=round.concat(S.bar.round);
+    recomputeStock();renderBar();
+    toast('Not saved: '+friendly(err)+' — the round is still here, try again',6000);
   }
+}
+async function undoLastRound(){
+  const last=S.bar.last;if(!last||!last.ids.length)return;
+  if(!confirm(`Undo ${last.label}?`))return;
+  S.bar.last=null;
+  for(const id of last.ids){
+    S.voided.add(id);
+    try{await call('voidLight',{name:who(),id:id,reason:'undone at the bar'})}
+    catch(err){S.voided.delete(id);toast('Could not undo: '+friendly(err),5000);break}
+  }
+  recomputeStock();renderBar();
 }
 function recomputeStock(){
   const st={};
@@ -1345,51 +1371,40 @@ function recomputeStock(){
   for(const id in S.pendDec)st[id]=(st[id]||0)-S.pendDec[id];
   S.stock=st;
 }
-async function barUndo(id){
-  const qi=S.bar.queue.findIndex(q=>q.tmpId===id);
-  if(qi>=0){
-    S.bar.queue.splice(qi,1);
-    S.tmp=S.tmp.filter(e=>e.id!==id);
-    S.entries=S.entries.filter(e=>e.id!==id);
-    recomputeStock();renderBar();toast('Removed');return;
-  }
-  const e=S.entries.find(x=>x.id===id);if(!e)return;
-  const keep=S.entries;
-  S.voided.add(id);recomputeStock();renderBar();
-  try{await call('voidLight',{name:who(),id:id,reason:'removed at the bar'});toast('Removed')}
-  catch(err){S.voided.delete(id);S.entries=keep;recomputeStock();renderBar();toast('Could not remove: '+friendly(err),5000)}
-}
-$('#bar-who').addEventListener('click',e=>{const b=e.target.closest('[data-w]');if(!b)return;S.bar.guest=b.dataset.w==='guest';renderBar()});
+$('#bar-who').addEventListener('click',e=>{const b=e.target.closest('[data-w]');if(!b)return;S.bar.guest=b.dataset.w==='guest';
+  if(S.bar.round.length){for(const r of S.bar.round){const it=r.id?S.items.get(r.id):null;if(it&&!r.comp)r.price=barPrice(it)}}
+  renderBar()});
 $('#bar-cats').addEventListener('click',e=>{const b=e.target.closest('[data-c]');if(!b)return;S.bar.cat=b.dataset.c;renderBar()});
-$('#bar-comp').onclick=()=>{S.bar.comp=!S.bar.comp;renderBar();if(S.bar.comp)toast('Comp mode — next taps are free',3000)};
-$('#bar-tab').onclick=()=>barTabModal();
+$('#bar-comp').onclick=()=>{S.bar.comp=!S.bar.comp;if(!S.bar.comp)S.bar.compReason='';renderBar();if(S.bar.comp)toast('Comp mode — next taps are free',3000)};
 $('#bar-grid').addEventListener('click',e=>{
-  const q=e.target.closest('[data-quick]');
-  if(q){quickItemModal();return}
+  if(e.target.closest('[data-quick]')){quickItemModal();return}
   const b=e.target.closest('.drink[data-id]');if(!b)return;
   const it=S.items.get(b.dataset.id);if(!it)return;
-  if(!S.shift&&!confirm('The bar isn’t open. Record drinks anyway?'))return;
+  if(!S.shift&&!confirm('The bar isn\u2019t open. Record drinks anyway?'))return;
   if(S.bar.comp&&!S.bar.compReason){compReasonModal(it);return}
   barTap(it,S.bar.comp?{reason:S.bar.compReason}:{});
 });
-$('#bar-last').addEventListener('click',e=>{const b=e.target.closest('[data-undo]');if(b)barUndo(b.dataset.undo)});
-function barTabModal(){
-  const roster=(S.settings.members||[]);
-  const others=memberNames().filter(n=>!roster.some(r=>catKey(r)===catKey(n)));
-  const bal=tabs();
-  const owed=n=>{const t=bal.get(catKey(n));return t&&t.balance>0.004?money(t.balance):''};
-  openModal(`<h3>Put drinks on a tab</h3>
-    <div class="mgrid">${roster.map(n=>`<button type="button" class="btn mbtn ${catKey(n)===catKey(S.bar.party)?'pri':''}" data-m="${esc(n)}">${esc(n)}${owed(n)?`<div class="muted" style="font-size:.78rem;font-weight:400">${owed(n)}</div>`:''}</button>`).join('')||'<span class="muted">No members yet — add them in Settings.</span>'}</div>
-    ${others.length?`<label for="bt-name" style="margin-top:.8rem">Someone else</label><input id="bt-name" list="c-members" placeholder="Name">`:`<label for="bt-name" style="margin-top:.8rem">Someone else</label><input id="bt-name" list="c-members" placeholder="Name">`}
-    <p class="muted" style="font-size:.85rem">Taps go on that tab (${esc(S.settings.memberPays[0]||'Club Account')}) until you switch back to walk-up.</p>
-    <div class="row" style="margin-top:.6rem;justify-content:flex-end"><button class="btn" data-clear>Walk-up (cash)</button><button class="btn" data-x>Cancel</button><button class="btn pri" data-ok>Use name</button></div>`,md=>{
-    const pick=v=>{S.bar.party=v;closeModal();renderBar();toast(v?`Tab: ${v}`:'Walk-up')};
-    md.querySelectorAll('[data-m]').forEach(b=>b.onclick=()=>pick(b.dataset.m));
+$('#br-items').addEventListener('click',e=>{
+  const b=e.target.closest('[data-drop]');if(!b)return;
+  S.bar.round=S.bar.round.filter(r=>r.tmp!==b.dataset.drop);renderRound();
+});
+$('#br-pay').addEventListener('click',e=>{
+  const p=e.target.closest('[data-pay]');
+  if(p){chargeRound(p.dataset.pay,'');return}
+  const t=e.target.closest('[data-tab]');
+  if(!t)return;
+  const memberPay=(S.settings.memberPays||[])[0];
+  if(!memberPay){toast('Add a member payment method (e.g. Club Account) in Settings');return}
+  if(t.dataset.tab){chargeRound(memberPay,t.dataset.tab);return}
+  otherMemberModal(memberPay);
+});
+$('#bar-last').addEventListener('click',e=>{if(e.target.closest('[data-undolast]'))undoLastRound()});
+function otherMemberModal(memberPay){
+  openModal(`<h3>Charge to</h3><label for="om-n">Name</label><input id="om-n" list="c-members" placeholder="Member or guest name">
+    <div class="row" style="margin-top:1rem;justify-content:flex-end"><button class="btn" data-x>Cancel</button><button class="btn pri" data-ok>Charge tab</button></div>`,md=>{
     md.querySelector('[data-x]').onclick=closeModal;
-    md.querySelector('[data-clear]').onclick=()=>pick('');
-    md.querySelector('[data-ok]').onclick=()=>{const v=md.querySelector('#bt-name').value.trim();if(!v){toast('Pick a member or choose Walk-up');return}pick(v)};
+    md.querySelector('[data-ok]').onclick=()=>{const v=md.querySelector('#om-n').value.trim();if(!v){toast('Enter a name');return}closeModal();chargeRound(memberPay,v)};
   });
-  $('#md').style.maxWidth='620px';
 }
 function compReasonModal(it){
   const picks=['Worker','Band','Prospect','Spill','Officer','Guest of club'];
@@ -1461,8 +1476,7 @@ function shiftModal(sh){
         const je=md.querySelector('#sh-ev');
         if(await write('openShift',{bartender:b,openingCash:oc===''?'':r2(num(oc)),joinEvent:!!(je&&je.checked)},`Bar open · ${b}`))closeModal();
       }else{
-        await flushBar();
-        if(S.bar.queue.length){toast('Still saving drinks — try again in a moment');return}
+        if(S.bar.round.length){toast('Charge the open round before closing the bar');return}
         const cv=md.querySelector('#sh-c').value;
         if(cv===''&&!confirm('Close the bar without a cash count?'))return;
         if(await write('closeShift',{id:sh.id,closingCash:cv===''?'':r2(num(cv)),notes:md.querySelector('#sh-n').value.trim()},'Bar closed'))closeModal();
