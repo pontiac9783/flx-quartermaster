@@ -87,7 +87,7 @@ label{display:block;font-size:.9rem;color:var(--muted);margin:.6rem 0 .2rem}
 .salebadge{display:inline-block;background:var(--accent);color:var(--accent-ink);font-size:.72rem;font-weight:700;letter-spacing:.04em;padding:.05rem .4rem;border-radius:4px;vertical-align:middle}
 .tile .salebadge{position:absolute;top:.9rem;left:.9rem;z-index:1}
 .tile .qty{z-index:1}
-.tile.held{opacity:.55}
+.tile.held{background:color-mix(in srgb,var(--muted) 12%,var(--surface))}
 .cartnote{font-size:.8rem;color:var(--muted);margin:.4rem 0 0}
 .thumb{display:block;width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:6px;background:var(--surface2);margin-bottom:.35rem}
 .thumb.ph{display:flex;align-items:center;justify-content:center;font-family:"Barlow Condensed",sans-serif;font-size:1.6rem;font-weight:700;color:var(--muted)}
@@ -148,7 +148,8 @@ img.thumb.zoomable,#f-pic img{cursor:zoom-in}
 .drink .lvl{position:absolute;top:.45rem;right:.5rem;font-size:.72rem;color:var(--muted)}
 .drink .lvl.low{color:var(--warn);font-weight:600}
 .drink .lvl.out{color:var(--bad);font-weight:700}
-.drink.dim{opacity:.5}
+.drink.dim{background:color-mix(in srgb,var(--muted) 12%,var(--surface))}
+.drink.dim b,.drink.dim .amt{color:var(--muted)}
 .drink.quick{border-style:dashed;align-items:center;justify-content:center;text-align:center;color:var(--muted)}
 .barhead{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center}
 .barhead .seg{width:auto}
@@ -1758,7 +1759,7 @@ function itemModal(it){
     <label class="row" style="color:var(--ink)"><input type="checkbox" id="f-sizes" style="width:auto;min-height:0"> Also create sizes (S, M, L, XL, 2XL, 3XL) — starting qty 0 each</label>`:
     `<label class="row" style="color:var(--ink)"><input type="checkbox" id="f-active" style="width:auto;min-height:0" ${it.active!==false?'checked':''}> Active (shown on the Sell screen)</label>`}
     <div class="row" style="margin-top:1rem;justify-content:space-between">
-      <div>${!isNew&&!hasHistory?'<button class="btn" data-del style="color:var(--bad)">Delete</button>':''}</div>
+      <div>${!isNew?`<button class="btn" data-del style="color:var(--bad)">Delete</button>`:''}</div>
       <div class="row"><button class="btn" data-x>Cancel</button>${!isNew?'<button class="btn" data-dup>Save as new size…</button>':''}<button class="btn pri" data-ok>Save</button></div>
     </div>`,md=>{
     const g=id=>md.querySelector('#'+id);
@@ -1820,7 +1821,12 @@ function itemModal(it){
       if(ok)closeModal();
     };
     const del=md.querySelector('[data-del]');
-    if(del)del.onclick=async()=>{if(!confirm('Delete this item? It has no ledger history.'))return;if(await write('deleteItem',{id:it.id},'Deleted'))closeModal()};
+    if(del)del.onclick=async()=>{
+      const n=S.entries.filter(e=>e.itemId===it.id&&!S.voided.has(e.id)).length;
+      const msg=n?`Delete "${label(it)}"?\n\nIt has ${n} ledger entr${n===1?'y':'ies'}. Those stay in the ledger and reports, but the item disappears from Sell, Bar and Stock and its on-hand count goes away.\n\nUntick "Active" instead if you only want it off the screens.`:`Delete "${label(it)}"? It has no history.`;
+      if(!confirm(msg))return;
+      if(await write('deleteItem',{id:it.id},'Item deleted'))closeModal();
+    };
     const dup=md.querySelector('[data-dup]');
     if(dup)dup.onclick=()=>{const d=read();closeModal();itemModal({...d,size:'',imageId:pic===undefined?it.imageId:''})};
   });
