@@ -174,6 +174,8 @@ body.role-bar .bar-hide,body.role-bar .cost-col{display:none!important}
 .rcv input{width:5.2rem;min-height:40px;padding:.2rem .4rem;text-align:right}
 .rcv .qi{width:6.6rem}
 .rcv .step{display:flex;gap:.25rem;align-items:center}
+.mbtn{min-height:56px;font-size:1.05rem;font-weight:600}
+.mgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:.5rem;margin-top:.5rem}
 .rcv .step button{width:34px;height:34px;border-radius:8px;border:1px solid var(--line);background:var(--surface2);cursor:pointer;font-size:1.05rem}
 .cashbox{display:grid;grid-template-columns:1fr auto;gap:.2rem .8rem;margin:.4rem 0}
 .cashbox .tot{font-weight:700;border-top:1px solid var(--line);padding-top:.2rem}
@@ -392,6 +394,7 @@ body.role-user .admin-only{display:none!important}
         <label for="se-chapter">Chapter</label><input id="se-chapter" placeholder="Finger Lakes">
                 <label for="se-pays">Payment methods (one per line)</label><textarea id="se-pays" rows="5"></textarea>
         <label for="se-mpays">Charged to a member — member name required (one per line)</label><textarea id="se-mpays" rows="2"></textarea>
+        <label for="se-members">Members (one per line) — used for tabs and the bar</label><textarea id="se-members" rows="6"></textarea>
         <div style="margin-top:.8rem"><button class="btn pri" id="se-save">Save club settings</button></div>
         <p class="muted">Stored on the Settings tab of the spreadsheet.</p>
       </div>
@@ -547,7 +550,7 @@ function tabs(){
   for(const t of m.values())t.balance=r2(t.charged-t.paid);
   return m;
 }
-function memberNames(){const m=new Map();for(const e of S.entries){const n=String(e.party||'').trim();if(n&&!m.has(n.toLowerCase()))m.set(n.toLowerCase(),n)}return [...m.values()].sort((a,b)=>a.localeCompare(b))}
+function memberNames(){const m=new Map();for(const n of (S.settings.members||[]))m.set(n.toLowerCase(),n);for(const e of S.entries){const n=String(e.party||'').trim();if(n&&!m.has(n.toLowerCase()))m.set(n.toLowerCase(),n)}return [...m.values()].sort((a,b)=>a.localeCompare(b))}
 const isOnSale=i=>!!(i&&i.onSale&&num(i.salePrice)>0);
 const evPrice=i=>(i&&S.activeEvent&&num(S.activeEvent.prices[i.id])>0)?num(S.activeEvent.prices[i.id]):0;
 const effPrice=i=>evPrice(i)||(isOnSale(i)?num(i.salePrice):num(i.price));
@@ -948,6 +951,7 @@ function saleProblem(title,html){
 
 function renderTabs(){
   const all=[...tabs().values()];
+  for(const n of (S.settings.members||[]))if(!all.some(t=>catKey(t.name)===catKey(n)))all.push({key:catKey(n),name:n,charged:0,paid:0,balance:0,last:0,rows:[]});
   const owing=all.filter(t=>t.balance>0.004);
   const out=owing.reduce((s,t)=>s+t.balance,0);
   const monthStart=new Date();monthStart.setDate(1);monthStart.setHours(0,0,0,0);
@@ -958,10 +962,10 @@ function renderTabs(){
     <div class="card stat"><div class="v money">${money(paidMonth)}</div><div class="l">Tab payments this month</div></div>`;
   const q=memberKey($('#tb-q').value),showAll=$('#tb-all').checked;
   const rows=all.filter(t=>(showAll||Math.abs(t.balance)>0.004)&&(!q||t.key.includes(q))).sort((a,b)=>b.balance-a.balance||a.name.localeCompare(b.name));
-  $('#tb-body').innerHTML=rows.length?rows.map(t=>`<tr data-k="${esc(t.key)}"><td><b>${esc(t.name)}</b><div class="muted tb-sub" style="font-size:.8rem">Last ${new Date(t.last).toLocaleDateString()}</div></td>
+  $('#tb-body').innerHTML=rows.length?rows.map(t=>`<tr data-k="${esc(t.key)}"><td><b>${esc(t.name)}</b><div class="muted tb-sub" style="font-size:.8rem">${t.last?'Last '+new Date(t.last).toLocaleDateString():'no charges'}</div></td>
     <td class="num money ${t.balance>0.004?'neg':''}"><b>${t.balance<-0.004?money(-t.balance)+' credit':money(t.balance)}</b></td>
     <td class="num money tb-x">${money(t.charged)}</td><td class="num money tb-x">${money(t.paid)}</td>
-    <td class="tb-x">${new Date(t.last).toLocaleDateString()}</td>
+    <td class="tb-x">${t.last?new Date(t.last).toLocaleDateString():'—'}</td>
     <td class="act"><div class="row" style="flex-wrap:nowrap;justify-content:flex-end">${t.balance>0.004?'<button class="btn sm pri" data-pay>Pay</button>':''}<button class="btn sm" data-hist>History</button></div></td></tr>`).join('')
     :`<tr><td colspan="6" class="empty">${all.length?'No members match.':'No tab charges yet. Sales paid with '+esc((S.settings.memberPays||[]).join(' / ')||'a member payment method')+' show up here.'}</td></tr>`;
 }
@@ -1369,19 +1373,22 @@ $('#bar-grid').addEventListener('click',e=>{
 });
 $('#bar-last').addEventListener('click',e=>{const b=e.target.closest('[data-undo]');if(b)barUndo(b.dataset.undo)});
 function barTabModal(){
-  const names=memberNames();
-  openModal(`<h3>Who's the tab for?</h3>
-    <label for="bt-name">Member</label><input id="bt-name" list="c-members" value="${esc(S.bar.party)}" placeholder="Name — leave blank for walk-up">
-    <p class="muted" style="font-size:.85rem">Taps go on this member's tab (${esc(S.settings.memberPays[0]||'Club Account')}) until you clear it.</p>
-    <div class="row" style="margin-top:1rem;justify-content:flex-end"><button class="btn" data-clear>Walk-up (cash)</button><button class="btn" data-x>Cancel</button><button class="btn pri" data-ok>Start tab</button></div>`,md=>{
+  const roster=(S.settings.members||[]);
+  const others=memberNames().filter(n=>!roster.some(r=>catKey(r)===catKey(n)));
+  const bal=tabs();
+  const owed=n=>{const t=bal.get(catKey(n));return t&&t.balance>0.004?money(t.balance):''};
+  openModal(`<h3>Put drinks on a tab</h3>
+    <div class="mgrid">${roster.map(n=>`<button type="button" class="btn mbtn ${catKey(n)===catKey(S.bar.party)?'pri':''}" data-m="${esc(n)}">${esc(n)}${owed(n)?`<div class="muted" style="font-size:.78rem;font-weight:400">${owed(n)}</div>`:''}</button>`).join('')||'<span class="muted">No members yet — add them in Settings.</span>'}</div>
+    ${others.length?`<label for="bt-name" style="margin-top:.8rem">Someone else</label><input id="bt-name" list="c-members" placeholder="Name">`:`<label for="bt-name" style="margin-top:.8rem">Someone else</label><input id="bt-name" list="c-members" placeholder="Name">`}
+    <p class="muted" style="font-size:.85rem">Taps go on that tab (${esc(S.settings.memberPays[0]||'Club Account')}) until you switch back to walk-up.</p>
+    <div class="row" style="margin-top:.6rem;justify-content:flex-end"><button class="btn" data-clear>Walk-up (cash)</button><button class="btn" data-x>Cancel</button><button class="btn pri" data-ok>Use name</button></div>`,md=>{
+    const pick=v=>{S.bar.party=v;closeModal();renderBar();toast(v?`Tab: ${v}`:'Walk-up')};
+    md.querySelectorAll('[data-m]').forEach(b=>b.onclick=()=>pick(b.dataset.m));
     md.querySelector('[data-x]').onclick=closeModal;
-    md.querySelector('[data-clear]').onclick=()=>{S.bar.party='';closeModal();renderBar()};
-    md.querySelector('[data-ok]').onclick=()=>{
-      const v=md.querySelector('#bt-name').value.trim();
-      if(!v){toast('Enter a member name or choose Walk-up');return}
-      S.bar.party=v;closeModal();renderBar();toast(`Tab: ${v}`);
-    };
+    md.querySelector('[data-clear]').onclick=()=>pick('');
+    md.querySelector('[data-ok]').onclick=()=>{const v=md.querySelector('#bt-name').value.trim();if(!v){toast('Pick a member or choose Walk-up');return}pick(v)};
   });
+  $('#md').style.maxWidth='620px';
 }
 function compReasonModal(it){
   const picks=['Worker','Band','Prospect','Spill','Officer','Guest of club'];
@@ -2072,7 +2079,7 @@ $('#rp-top').addEventListener('click',e=>{const d=e.target.closest('[data-detail
 
 
 let settingsDirty=false;
-['#se-club','#se-chapter','#se-pays','#se-mpays'].forEach(s=>$(s).addEventListener('input',()=>settingsDirty=true));
+['#se-club','#se-chapter','#se-pays','#se-mpays','#se-members'].forEach(s=>$(s).addEventListener('input',()=>settingsDirty=true));
 const catKey=c=>String(c||'').trim().toLowerCase();
 let catSec='merch';
 function catCounts(sec){const m={};for(const i of S.items.values()){if(sec&&(i.section||'merch')!==sec)continue;const k=catKey(i.cat);m[k]=(m[k]||0)+1}return m}
@@ -2107,7 +2114,7 @@ function renderSettings(){
   renderUsers();
   $('#se-save').disabled=!S.loaded;$('#se-addcat').disabled=!S.loaded;
   if(!S.loaded){$('#se-catlist').innerHTML='<tr><td colspan="3" class="empty">Loading settings…</td></tr>';return}
-  if(!settingsDirty){$('#se-club').value=S.settings.club;$('#se-chapter').value=S.settings.chapter||'';$('#se-pays').value=S.settings.pays.join('\n');$('#se-mpays').value=(S.settings.memberPays||[]).join('\n')}
+  if(!settingsDirty){$('#se-club').value=S.settings.club;$('#se-chapter').value=S.settings.chapter||'';$('#se-pays').value=S.settings.pays.join('\n');$('#se-mpays').value=(S.settings.memberPays||[]).join('\n');$('#se-members').value=(S.settings.members||[]).join('\n')}
   md_catsec();
   const cnt=catCounts(catSec);
   const orph=orphanCats(catSec);
@@ -2120,7 +2127,7 @@ function renderSettings(){
 const lines=s=>[...new Set(s.split('\n').map(x=>x.trim()).filter(Boolean))];
 $('#se-save').onclick=async()=>{
   if(!S.loaded)return;
-  const d={club:$('#se-club').value.trim(),chapter:$('#se-chapter').value.trim(),pays:lines($('#se-pays').value),memberPays:lines($('#se-mpays').value)};
+  const d={club:$('#se-club').value.trim(),chapter:$('#se-chapter').value.trim(),pays:lines($('#se-pays').value),memberPays:lines($('#se-mpays').value),members:lines($('#se-members').value)};
   const pk=new Set(d.pays.map(catKey)),bad=d.memberPays.filter(m=>!pk.has(catKey(m)));
   if(bad.length){toast(`Not a payment method: ${bad.join(', ')}`,4000);return}
   if(!d.pays.length){toast('Need at least one payment method');return}
@@ -2181,8 +2188,13 @@ async function signOut(){
 $('#se-signout').onclick=()=>{if(S.cart.size&&!confirm('Sign out and clear your current cart?'))return;signOut()};
 $('#se-save-me').onclick=()=>{store('qm_who',$('#se-who').value.trim());store('qm_theme',$('#se-theme').value);applyTheme();showWho();toast('Saved on this device')};
 
+function fillMembers(){
+  const dl=$('#c-members');if(!dl)return;
+  const names=memberNames();
+  if(dl.childElementCount!==names.length)dl.innerHTML=names.map(n=>`<option value="${esc(n)}">`).join('');
+}
 function refresh(){
-  renderEvBar();renderBarBar();
+  fillMembers();renderEvBar();renderBarBar();
   const c=S.settings.club||'Quartermaster',ch=S.settings.chapter||'';
   $('#title').innerHTML=`${esc(c)}${ch?' · '+esc(ch):''} <span>· Quartermaster</span>`;
   if(S.view==='sell')renderSell();
