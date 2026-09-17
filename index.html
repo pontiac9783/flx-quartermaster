@@ -556,13 +556,15 @@ function tabs(){
     const k=memberKey(e.party);if(!k)continue;
     const charge=isCharge(e),pay=e.type==='payment';
     if(!charge&&!pay)continue;
-    const t=m.get(k)||{key:k,name:e.party.trim(),charged:0,paid:0,last:0,rows:[]};
+    const t=m.get(k)||{key:k,name:e.party.trim(),charged:0,paid:0,barCharged:0,merchCharged:0,barPaid:0,merchPaid:0,last:0,rows:[]};
     t.name=e.party.trim();
-    if(charge)t.charged+=num(e.total);else t.paid+=num(e.total);
+    const till=e.section==='bar'?'bar':'merch';
+    if(charge){t.charged+=num(e.total);t[till+'Charged']+=num(e.total)}
+    else{t.paid+=num(e.total);t[till+'Paid']+=num(e.total)}
     t.last=Math.max(t.last,e.ts);t.rows.push(e);
     m.set(k,t);
   }
-  for(const t of m.values())t.balance=r2(t.charged-t.paid);
+  for(const t of m.values()){t.balance=r2(t.charged-t.paid);t.barBal=r2(t.barCharged-t.barPaid);t.merchBal=r2(t.merchCharged-t.merchPaid)}
   return m;
 }
 function memberNames(){const m=new Map();for(const n of (S.settings.members||[]))m.set(n.toLowerCase(),n);for(const e of S.entries){const n=String(e.party||'').trim();if(n&&!m.has(n.toLowerCase()))m.set(n.toLowerCase(),n)}return [...m.values()].sort((a,b)=>a.localeCompare(b))}
@@ -967,7 +969,7 @@ function saleProblem(title,html){
 
 function renderTabs(){
   const all=[...tabs().values()];
-  for(const n of (S.settings.members||[]))if(!all.some(t=>catKey(t.name)===catKey(n)))all.push({key:catKey(n),name:n,charged:0,paid:0,balance:0,last:0,rows:[]});
+  for(const n of (S.settings.members||[]))if(!all.some(t=>catKey(t.name)===catKey(n)))all.push({key:catKey(n),name:n,charged:0,paid:0,balance:0,barBal:0,merchBal:0,barCharged:0,merchCharged:0,barPaid:0,merchPaid:0,last:0,rows:[]});
   const owing=all.filter(t=>t.balance>0.004);
   const out=owing.reduce((s,t)=>s+t.balance,0);
   const monthStart=new Date();monthStart.setDate(1);monthStart.setHours(0,0,0,0);
@@ -979,7 +981,7 @@ function renderTabs(){
   const q=memberKey($('#tb-q').value),showAll=$('#tb-all').checked;
   const rows=all.filter(t=>(showAll||Math.abs(t.balance)>0.004)&&(!q||t.key.includes(q))).sort((a,b)=>b.balance-a.balance||a.name.localeCompare(b.name));
   $('#tb-body').innerHTML=rows.length?rows.map(t=>`<tr data-k="${esc(t.key)}"><td><b>${esc(t.name)}</b><div class="muted tb-sub" style="font-size:.8rem">${t.last?'Last '+new Date(t.last).toLocaleDateString():'no charges'}</div></td>
-    <td class="num money ${t.balance>0.004?'neg':''}"><b>${t.balance<-0.004?money(-t.balance)+' credit':money(t.balance)}</b></td>
+    <td class="num money ${t.balance>0.004?'neg':''}"><b>${t.balance<-0.004?money(-t.balance)+' credit':money(t.balance)}</b>${(t.barBal>0.004&&t.merchBal>0.004)?`<div class="muted" style="font-size:.78rem">bar ${money(t.barBal)} · merch ${money(t.merchBal)}</div>`:(t.barBal>0.004?'<div class="muted" style="font-size:.78rem">bar</div>':(t.merchBal>0.004?'<div class="muted" style="font-size:.78rem">merch</div>':''))}</td>
     <td class="num money tb-x">${money(t.charged)}</td><td class="num money tb-x">${money(t.paid)}</td>
     <td class="tb-x">${t.last?new Date(t.last).toLocaleDateString():'—'}</td>
     <td class="act"><div class="row" style="flex-wrap:nowrap;justify-content:flex-end">${t.balance>0.004?'<button class="btn sm pri" data-pay>Pay</button>':''}<button class="btn sm" data-hist>History</button></div></td></tr>`).join('')
@@ -992,29 +994,58 @@ $('#tb-body').addEventListener('click',e=>{
   if(e.target.closest('[data-pay]'))payModal(t);
   else if(e.target.closest('[data-hist]'))histModal(t);
 });
-function payModal(t){
+function payModal(t,preTill){
   const methods=S.settings.pays.filter(p=>!needsMember(p));
   if(!methods.length){toast('Add a payment method (e.g. Cash) in Settings first');return}
   let pm=methods[0];
+  const bar=r2(t.barBal||0),merch=r2(t.merchBal||0);
+  let till=preTill||(bar>0.004?'bar':'merch');
+  if(till==='bar'&&bar<=0.004)till='merch';
+  if(till==='merch'&&merch<=0.004&&bar>0.004)till='bar';
+  const owedOf=x=>x==='bar'?bar:merch;
   openModal(`<h3>Payment from ${esc(t.name)}</h3>
-    <p style="margin-top:0">Balance owed: <b class="neg">${money(t.balance)}</b></p>
+    <p style="margin-top:0">Owes <b class="neg">${money(t.balance)}</b> ${(bar>0.004&&merch>0.004)?`<span class="muted">· bar ${money(bar)} · merch ${money(merch)}</span>`:''}</p>
+    <label>Paying which tab?</label>
+    <div class="seg" id="tp-till">
+      <button type="button" data-t="bar" class="${till==='bar'?'on':''}" ${bar>0.004?'':'disabled style="opacity:.45"'}>🍻 Bar ${money(bar)}</button>
+      <button type="button" data-t="merch" class="${till==='merch'?'on':''}" ${merch>0.004?'':'disabled style="opacity:.45"'}>👕 Merch ${money(merch)}</button>
+    </div>
+    <p class="muted" style="font-size:.85rem;margin:.3rem 0 0">Bar money goes in the bar box${S.shift?` (${esc(S.shift.bartender)}’s shift)`:''}; merch money goes to the Quartermaster.</p>
     <label for="tp-amt">Amount ($)</label>
-    <div class="row"><input id="tp-amt" class="grow" type="number" step="0.01" min="0.01" max="${t.balance}" value="${t.balance.toFixed(2)}"><button class="btn" data-full>Full balance</button></div>
-    <label>Paid with</label><div class="seg" id="tp-pm">${methods.map(m=>`<button data-m="${esc(m)}" class="${m===pm?'on':''}">${esc(m)}</button>`).join('')}</div>
+    <div class="row"><input id="tp-amt" class="grow" type="number" step="0.01" min="0.01" inputmode="decimal" value="${owedOf(till).toFixed(2)}"><button class="btn" data-full>Full ${till==='bar'?'bar':'merch'}</button></div>
+    <label>Paid with</label><div class="seg" id="tp-pm">${methods.map(m=>`<button type="button" data-m="${esc(m)}" class="${m===pm?'on':''}">${esc(m)}</button>`).join('')}</div>
     <label for="tp-note">Note (optional)</label><input id="tp-note" placeholder="e.g. paid at meeting">
     <p id="tp-after" class="muted"></p>
-    <div class="row" style="margin-top:.6rem;justify-content:flex-end"><button class="btn" data-x>Cancel</button><button class="btn pri" data-ok>Record payment</button></div>`,md=>{
+    <div class="row" style="margin-top:.6rem;justify-content:flex-end"><button class="btn" data-x>Cancel</button>${(bar>0.004&&merch>0.004)?'<button class="btn" data-both>Pay both</button>':''}<button class="btn pri" data-ok>Record payment</button></div>`,md=>{
     const amt=md.querySelector('#tp-amt'),after=md.querySelector('#tp-after');
-    const upd=()=>{const a=r2(num(amt.value));after.textContent=a>t.balance+0.001?`That’s more than the ${money(t.balance)} owed.`:`Balance after: ${money(r2(t.balance-a))}`;after.className=a>t.balance+0.001?'neg':'muted'};
+    const upd=()=>{
+      const a=r2(num(amt.value)),owed=owedOf(till);
+      after.innerHTML=a>owed+0.001?`<span class="neg">That’s more than the ${money(owed)} on the ${till} tab.</span>`
+        :`${till==='bar'?'Bar':'Merch'} tab after: ${money(r2(owed-a))} · total after: ${money(r2(t.balance-a))}`;
+    };
+    md.querySelector('#tp-till').onclick=ev=>{
+      const b=ev.target.closest('[data-t]');if(!b||b.disabled)return;
+      till=b.dataset.t;
+      md.querySelectorAll('#tp-till button').forEach(x=>x.classList.toggle('on',x===b));
+      amt.value=owedOf(till).toFixed(2);
+      md.querySelector('[data-full]').textContent='Full '+(till==='bar'?'bar':'merch');
+      upd();
+    };
     amt.addEventListener('input',upd);upd();
-    md.querySelector('[data-full]').onclick=()=>{amt.value=t.balance.toFixed(2);upd()};
-    md.querySelector('#tp-pm').onclick=e=>{const b=e.target.closest('[data-m]');if(!b)return;pm=b.dataset.m;md.querySelectorAll('#tp-pm button').forEach(x=>x.classList.toggle('on',x===b))};
+    md.querySelector('[data-full]').onclick=()=>{amt.value=owedOf(till).toFixed(2);upd()};
+    md.querySelector('#tp-pm').onclick=ev=>{const b=ev.target.closest('[data-m]');if(!b)return;pm=b.dataset.m;md.querySelectorAll('#tp-pm button').forEach(x=>x.classList.toggle('on',x===b))};
     md.querySelector('[data-x]').onclick=closeModal;
+    const both=md.querySelector('[data-both]');
+    if(both)both.onclick=async()=>{
+      const note=md.querySelector('#tp-note').value;
+      if(!(await write('recordTabPayment',{member:t.name,amount:bar,pay:pm,note,section:'bar'},`Bar tab paid · ${money(bar)}`)))return;
+      if(await write('recordTabPayment',{member:t.name,amount:merch,pay:pm,note,section:'merch'},`Merch tab paid · ${money(merch)}`))closeModal();
+    };
     md.querySelector('[data-ok]').onclick=async()=>{
-      const a=r2(num(amt.value));
+      const a=r2(num(amt.value)),owed=owedOf(till);
       if(a<=0){toast('Enter an amount');amt.focus();return}
-      if(a>t.balance+0.001){toast('Amount is more than the balance');amt.focus();return}
-      if(await write('recordTabPayment',{member:t.name,amount:a,pay:pm,note:md.querySelector('#tp-note').value},`Payment recorded · ${money(a)} ${pm}`))closeModal();
+      if(a>owed+0.001){toast(`More than the ${money(owed)} on the ${till} tab`);amt.focus();return}
+      if(await write('recordTabPayment',{member:t.name,amount:a,pay:pm,note:md.querySelector('#tp-note').value,section:till},`${till==='bar'?'Bar':'Merch'} payment · ${money(a)} ${pm}`))closeModal();
     };
   });
 }
@@ -1349,43 +1380,49 @@ function shiftTotals(sh){
   const es=sh?live().filter(e=>e.shift===sh.id):[];
   const sales=es.filter(e=>e.type==='sale'),comps=es.filter(e=>e.type==='comp');
   const cashName=(S.settings.pays||[]).find(p=>p.trim().toLowerCase()==='cash')||'';
-  const cash=sales.filter(e=>e.pay===cashName).reduce((s,e)=>s+num(e.total),0);
+  const tabPays=es.filter(e=>e.type==='payment');
+  const cashPays=tabPays.filter(e=>e.pay===cashName).reduce((s,e)=>s+num(e.total),0);
+  const cash=r2(sales.filter(e=>e.pay===cashName).reduce((s,e)=>s+num(e.total),0)+cashPays);
   const tabbed=sales.filter(e=>e.onTab);
   const tabTot=tabbed.reduce((s,e)=>s+num(e.total),0);
   const other=sales.reduce((s,e)=>s+num(e.total),0)-cash-tabTot;
   const byTab=new Map();
-  for(const e of tabbed){const k=e.party||'—';const o=byTab.get(k)||{n:0,amt:0};o.n++;o.amt+=num(e.total);byTab.set(k,o)}
+  const tslot=k=>{const o=byTab.get(k)||{n:0,amt:0,paid:0};byTab.set(k,o);return o};
+  for(const e of tabbed){const o=tslot(e.party||'—');o.n++;o.amt+=num(e.total)}
+  for(const e of tabPays)if(e.party)tslot(e.party).paid+=num(e.total);
   const byItem=new Map();
-  for(const e of es){const k=e.itemName;const o=byItem.get(k)||{n:0,amt:0};o.n++;o.amt+=num(e.total);byItem.set(k,o)}
+  for(const e of es){if(e.type!=='sale'&&e.type!=='comp')continue;const k=e.itemName;const o=byItem.get(k)||{n:0,amt:0};o.n++;o.amt+=num(e.total);byItem.set(k,o)}
   const opening=sh&&sh.openingCash!=null?num(sh.openingCash):0;
   const compVal=r2(comps.reduce((s,e)=>{const i=S.items.get(e.itemId);return s+(i?num(i.price):0)},0));
-  return {es,sales,comps,compVal,cash,tabbed,tabTot,other,byTab,byItem,opening,expected:r2(opening+cash),cashName};
+  const tabPaid=r2(tabPays.reduce((s,e)=>s+num(e.total),0));
+  return {es,sales,comps,compVal,cash,cashPays,tabPays,tabPaid,tabbed,tabTot,other,byTab,byItem,opening,expected:r2(opening+cash),cashName};
 }
 function barNightModal(){
   const sh=S.shift;
   if(!sh){toast('No bar shift is open');return}
   const x=shiftTotals(sh);
   const bal=tabs();
-  const tabRows=[...x.byTab.entries()].sort((a,b)=>b[1].amt-a[1].amt);
+  const tabRows=[...x.byTab.entries()].sort((a,b)=>(b[1].amt-b[1].paid)-(a[1].amt-a[1].paid));
   const items=[...x.byItem.entries()].sort((a,b)=>b[1].n-a[1].n);
+  const keyOf=roundKeyer(x.es.filter(e=>e.type==='sale'||e.type==='comp'));
   const rmap=new Map(),recent=[];
   for(const e of x.es){
-    const key=e.sale||e.id;
+    const key=(e.type==='sale'||e.type==='comp')?keyOf(e):e.id;
     if(rmap.has(key)){rmap.get(key).kids.push(e);continue}
     const g={round:key,head:e,kids:[e]};rmap.set(key,g);recent.push(g);
   }
   openModal(`<h3>Tonight · ${esc(sh.bartender)}</h3>
     <p class="muted" style="margin-top:0">Open since ${new Date(sh.openedAt).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})}${sh.event?' · '+esc(eventName(sh.event)):''}</p>
     <div class="stats">
-      <div class="card stat"><div class="v money">${money(x.cash)}</div><div class="l">Cash taken</div></div>
-      <div class="card stat"><div class="v money">${money(x.tabTot)}</div><div class="l">On tabs · ${x.tabbed.length} drink${x.tabbed.length===1?'':'s'}</div></div>
+      <div class="card stat"><div class="v money">${money(x.cash)}</div><div class="l">Cash taken${x.cashPays?` · incl. ${money(x.cashPays)} tab payments`:''}</div></div>
+      <div class="card stat"><div class="v money">${money(r2(x.tabTot-x.tabPaid))}</div><div class="l">Net on tabs · ${x.tabbed.length} drink${x.tabbed.length===1?'':'s'}${x.tabPaid?` · ${money(x.tabPaid)} paid back`:''}</div></div>
       <div class="card stat"><div class="v money">${money(x.expected)}</div><div class="l">Expected in bar box${sh.openingCash!=null?` (incl. ${money(x.opening)} start)`:''}</div></div>
       <div class="card stat"><div class="v">${x.sales.length}</div><div class="l">Drinks poured</div></div>
       <div class="card stat"><div class="v">${x.comps.length}</div><div class="l">Comped${x.compVal?` · ${money(x.compVal)} value`:''}</div></div>
     </div>
     <div class="grid2">
       <div><h3 style="font-size:1rem">Running tabs tonight</h3>
-        <div class="tw"><table><tbody>${tabRows.length?tabRows.map(([n,o])=>{const t=bal.get(catKey(n));return `<tr><td><b>${esc(n)}</b>${t&&t.balance>0.004?`<div class="muted" style="font-size:.8rem">owes ${money(t.balance)} total</div>`:''}</td><td class="num">${o.n}</td><td class="num money">${money(o.amt)}</td></tr>`}).join(''):'<tr><td class="empty">No tabs yet tonight.</td></tr>'}</tbody></table></div></div>
+        <div class="tw"><table><thead><tr><th>Member</th><th class="num">Drinks</th><th class="num">Charged</th><th class="num">Paid</th><th class="num">Net</th></tr></thead><tbody>${tabRows.length?tabRows.map(([n,o])=>{const t=bal.get(catKey(n));return `<tr><td class="wrap"><b>${esc(n)}</b>${t&&t.barBal>0.004?`<div class="muted" style="font-size:.8rem">bar tab ${money(t.barBal)}</div>`:''}</td><td class="num">${o.n}</td><td class="num money">${money(o.amt)}</td><td class="num money ${o.paid?'pos':''}">${o.paid?money(o.paid):'—'}</td><td class="num money"><b>${money(r2(o.amt-o.paid))}</b></td></tr>`}).join(''):'<tr><td colspan="5" class="empty">No tabs yet tonight.</td></tr>'}</tbody></table></div></div>
       <div><h3 style="font-size:1rem">Poured tonight</h3>
         <div class="tw" style="max-height:16rem;overflow:auto"><table><tbody>${items.length?items.map(([n,o])=>`<tr><td>${esc(n)}</td><td class="num">${o.n}</td><td class="num money">${money(o.amt)}</td></tr>`).join(''):'<tr><td class="empty">Nothing yet.</td></tr>'}</tbody></table></div></div>
     </div>
@@ -1549,7 +1586,8 @@ function shiftModal(sh){
   const es=sh?live().filter(e=>e.shift===sh.id):[];
   const sales=es.filter(e=>e.type==='sale');
   const cashName=(S.settings.pays||[]).find(p=>p.trim().toLowerCase()==='cash')||'';
-  const cash=sales.filter(e=>e.pay===cashName).reduce((s,e)=>s+num(e.total),0);
+  const cashPays=es.filter(e=>e.type==='payment'&&e.pay===cashName).reduce((s,e)=>s+num(e.total),0);
+  const cash=r2(sales.filter(e=>e.pay===cashName).reduce((s,e)=>s+num(e.total),0)+cashPays);
   const tabs=sales.filter(e=>e.onTab).reduce((s,e)=>s+num(e.total),0);
   const other=sales.reduce((s,e)=>s+num(e.total),0)-cash-tabs;
   const comps=es.filter(e=>e.type==='comp').length;
@@ -1563,7 +1601,7 @@ function shiftModal(sh){
     :`<p class="muted" style="margin-top:0">${esc(sh.bartender)} · opened ${new Date(sh.openedAt).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})}${sh.event?' · '+esc(eventName(sh.event)):''}</p>
       <div class="cashbox">
         <span>Opening cash</span><span class="money">${sh.openingCash==null?'—':money(opening)}</span>
-        <span>+ Cash donations</span><span class="money">${money(cash)}</span>
+        <span>+ Cash donations${cashPays?' &amp; tab payments':''}</span><span class="money">${money(cash)}</span>
         <span class="tot">Expected in bar box</span><span class="tot money">${money(expected)}</span>
         <span>On tabs</span><span class="money">${money(tabs)}</span>
         ${other?`<span>Other methods</span><span class="money">${money(other)}</span>`:''}
@@ -1977,6 +2015,14 @@ function inPeriod(e,m){
 const priceKey=pr=>Object.keys(pr||{}).sort().map(k=>k+':'+pr[k]).join('|');
 const evState=()=>S.activeEvent?{id:S.activeEvent.id,pk:priceKey(S.activeEvent.prices)}:{id:'',pk:''};
 function repriceCart(){let n=0;for(const l of S.cart.values()){const it=S.items.get(l.id);if(l.auto!==false&&it){const p=effPrice(it);if(p!==l.price){l.price=p;n++}}}return n}
+function roundKeyer(list){
+  const seen={};
+  for(const e of list)if(e.sale)seen[e.sale]=(seen[e.sale]||0)+1;
+  return e=>{
+    if(e.sale&&seen[e.sale]>1)return e.sale;
+    return `t|${e.shift||''}|${e.pay||''}|${e.party||''}|${e.type}|${Math.round(e.ts/8000)}`;
+  };
+}
 const shiftLabel=id=>{const s=S.shifts.find(x=>x.id===id);return s?`${s.bartender}’s shift`:'bar shift'};
 const eventName=id=>{const e=S.events.find(x=>x.id===id);return e?e.name:''};
 function shipModal(saleId){
@@ -2041,12 +2087,14 @@ function renderLedger(){
   fillMonths($('#lg-month'));
   const m=$('#lg-month').value,t=$('#lg-type').value,q=$('#lg-q').value.trim().toLowerCase();
   const raw=S.entries.filter(e=>inPeriod(e,m)&&(!t||e.type===t)&&(!q||[e.itemName,e.who,e.party,e.note,e.pay].join(' ').toLowerCase().includes(q)));
+  const keyOf=roundKeyer(raw.filter(e=>e.section==='bar'&&(e.type==='sale'||e.type==='comp')));
   const rounds=new Map();
   const rows=[];
   for(const e of raw){
-    if(e.section==='bar'&&e.sale&&(e.type==='sale'||e.type==='comp')){
-      if(rounds.has(e.sale)){rounds.get(e.sale).kids.push(e);continue}
-      const g={round:e.sale,head:e,kids:[e]};rounds.set(e.sale,g);rows.push(g);continue;
+    if(e.section==='bar'&&(e.type==='sale'||e.type==='comp')){
+      const k=keyOf(e);
+      if(rounds.has(k)){rounds.get(k).kids.push(e);continue}
+      const g={round:k,head:e,kids:[e]};rounds.set(k,g);rows.push(g);continue;
     }
     rows.push(e);
   }
