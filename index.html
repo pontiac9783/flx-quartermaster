@@ -163,6 +163,8 @@ td.wrap{white-space:normal;min-width:10rem}
 .tag{display:inline-block;padding:.05rem .5rem;border-radius:4px;font-size:.8rem;background:var(--surface2)}
 .t-sale{background:color-mix(in srgb,var(--brass) 25%,transparent)}
 .t-payment{background:color-mix(in srgb,var(--ok) 22%,transparent)}
+.t-income{background:color-mix(in srgb,var(--ok) 22%,transparent)}
+.t-expense{background:color-mix(in srgb,var(--bad) 18%,transparent)}
 .t-shipping{background:color-mix(in srgb,var(--brass) 18%,transparent)}
 .t-receive{background:color-mix(in srgb,var(--ok) 22%,transparent)}
 .t-loss,.t-void{background:color-mix(in srgb,var(--bad) 22%,transparent)}
@@ -311,7 +313,7 @@ body.role-user .admin-only{display:none!important}
       <select id="lg-month" style="width:auto"></select>
       <select id="lg-type" style="width:auto">
         <option value="">All types</option><option value="sale">Sales</option><option value="receive">Received</option>
-        <option value="adjust">Count adjustments</option><option value="loss">Loss / damage</option><option value="comp">Comp / give-away</option><option value="shipping">Shipping</option><option value="payment">Tab payments</option><option value="void">Voids</option>
+        <option value="adjust">Count adjustments</option><option value="loss">Loss / damage</option><option value="comp">Comp / give-away</option><option value="shipping">Shipping</option><option value="income">Event income</option><option value="expense">Costs / payouts</option><option value="payment">Tab payments</option><option value="void">Voids</option>
       </select>
       <input id="lg-q" class="grow" type="search" placeholder="Search item, person, note…">
     </div>
@@ -330,7 +332,7 @@ body.role-user .admin-only{display:none!important}
       <div class="card"><h3>Takings by payment method</h3><div class="tw"><table><thead><tr><th>Method</th><th class="num">Sales</th><th class="num">Amount</th><th class="num">Shipping</th><th class="num">Tab payments in</th></tr></thead><tbody id="rp-pay"></tbody></table></div></div>
       <div class="card"><h3>Top sellers</h3><div class="tw"><table><thead><tr><th>Item</th><th class="num">Units</th><th class="num">Revenue</th><th class="num">Profit</th></tr></thead><tbody id="rp-top"></tbody></table></div></div>
       <div class="card"><h3>Needs reordering</h3><div class="tw"><table><thead><tr><th>Item</th><th class="num">On hand</th><th class="num">Reorder at</th></tr></thead><tbody id="rp-low"></tbody></table></div></div>
-      <div class="card"><h3>Events</h3><div class="tw"><table><thead><tr><th>Event</th><th class="num">Sales</th><th class="num">Revenue</th><th class="num">Profit</th><th class="num">Cash +/-</th></tr></thead><tbody id="rp-events"></tbody></table></div></div>
+      <div class="card"><h3>Events</h3><div class="tw"><table><thead><tr><th>Event</th><th class="num">Sales</th><th class="num">Revenue</th><th class="num">Event net</th><th class="num">Cash +/-</th></tr></thead><tbody id="rp-events"></tbody></table></div></div>
       <div class="card"><h3>Sales by price type</h3><div class="tw"><table><thead><tr><th>Price</th><th class="num">Units</th><th class="num">Revenue</th><th class="num">Discount given</th></tr></thead><tbody id="rp-ptype"></tbody></table></div></div>
       <div class="card"><h3>Shrinkage &amp; comps</h3><div class="tw"><table><thead><tr><th>Type</th><th class="num">Units</th><th class="num">Cost value</th></tr></thead><tbody id="rp-shrink"></tbody></table></div></div>
     </div>
@@ -468,7 +470,7 @@ const S={
   settings:{club:'Quartermaster',cats:[],pays:[]},
   images:new Map(),held:{},events:[],activeEvent:null,pending:0,pendDec:{},ship:{on:false,manual:false},users:[],role:'',owner:'',imgPending:new Set(),cart:new Map(),pay:null,cat:'',view:'sell',busy:false,loaded:false
 };
-const TYPES={sale:'Sale',shipping:'Shipping',payment:'Tab payment',receive:'Received',adjust:'Count adj.',loss:'Loss / damage',comp:'Comp / give-away',void:'Void'};
+const TYPES={sale:'Sale',shipping:'Shipping',payment:'Tab payment',income:'Event income',expense:'Cost / payout',receive:'Received',adjust:'Count adj.',loss:'Loss / damage',comp:'Comp / give-away',void:'Void'};
 
 function toast(msg,ms){const t=$('#toast');t.textContent=msg;t.style.display='block';clearTimeout(toast._t);toast._t=setTimeout(()=>t.style.display='none',ms||2600)}
 function banner(msg){const b=$('#banner');if(!msg){b.style.display='none';return}b.textContent=msg;b.style.display='block'}
@@ -809,7 +811,7 @@ $('#s-tiles').addEventListener('click',e=>{
   const l=S.cart.get(it.id),next=(l?l.qty:0)+1,hl=heldElsewhere(it.id);
   if(!isAdmin()&&next>avail(it.id)){toast(avail(it.id)>0?`Only ${avail(it.id)} in stock`:`${label(it)} is out of stock — ask an admin`);return}
   if(hl>0&&next>avail(it.id)){toast(avail(it.id)>0?`Only ${avail(it.id)} available — ${hl} in another cart`:`${label(it)} is in another cart`);return}
-  if(l)l.qty++;else S.cart.set(it.id,{id:it.id,qty:1,price:effPrice(it)});
+  if(l)l.qty++;else S.cart.set(it.id,{id:it.id,qty:1,price:effPrice(it),auto:true});
   renderSell();syncCartSoon();
 });
 $('#c-lines').addEventListener('click',e=>{
@@ -824,7 +826,7 @@ $('#c-lines').addEventListener('click',e=>{
 $('#c-lines').addEventListener('change',e=>{
   if(!e.target.matches('[data-price]'))return;
   const l=S.cart.get(e.target.closest('.cline').dataset.id);if(!l)return;
-  l.price=Math.max(0,r2(num(e.target.value)));renderCart();
+  l.price=Math.max(0,r2(num(e.target.value)));l.auto=false;renderCart();
 });
 $('#c-pay').addEventListener('click',e=>{const b=e.target.closest('[data-p]');if(!b)return;S.pay=b.dataset.p;renderCart();if(needsMember(S.pay)&&!$('#c-party').value.trim())$('#c-party').focus()});
 $('#c-party').addEventListener('input',renderCart);
@@ -849,7 +851,8 @@ $('#c-go').onclick=async()=>{
   const tot=lines.reduce((s,l)=>s+l.qty*l.price,0)+shipAmt,pay=S.pay;
   clearTimeout(syncT);
   const snap={cart:[...S.cart.values()].map(l=>({...l})),pay,party:$('#c-party').value,note:$('#c-note').value,ship:{...S.ship},shipAmt:$('#c-ship-amt').value,shipTo:$('#c-ship-to').value};
-  const payload={name:who(),lines,pay,party:snap.party,note:snap.note,allowNegative:oversell,shipping};
+  const es0=evState();
+  const payload={name:who(),lines,pay,party:snap.party,note:snap.note,allowNegative:oversell,shipping,eventId:es0.id,priceKey:es0.pk};
   S.cart.clear();$('#c-party').value='';$('#c-note').value='';resetShip();
   for(const l of lines){S.stock[l.id]=(S.stock[l.id]||0)-l.qty;S.pendDec[l.id]=(S.pendDec[l.id]||0)+l.qty}
   const undoDec=()=>{for(const l of lines){S.pendDec[l.id]-=l.qty;if(S.pendDec[l.id]<=0)delete S.pendDec[l.id]}};
@@ -865,6 +868,10 @@ $('#c-go').onclick=async()=>{
     if(e&&(e.ran||e.timedOut)){
       saleProblem('Couldn’t confirm this sale',`<p>${esc(what)} — ${money(tot)} ${esc(pay)}${snap.party?' · '+esc(snap.party):''}</p><p>The server may have saved it. Check the Stock / Tabs before entering it again.</p>`,null);
       load();
+    }else if(/EVENT_CHANGED/.test(friendly(e))){
+      restoreCart(snap);
+      await load();repriceCart();renderSell();
+      saleProblem('Prices changed',`<p>The event or its prices changed while you were ringing this up. The cart has been updated with current prices.</p><p>Review the total and tap <b>Complete sale</b> again.</p>`,true);
     }else{
       restoreCart(snap);
       saleProblem('Sale not saved',`<p>${esc(friendly(e))}</p><p>${esc(what)} — ${money(tot)} ${esc(pay)}</p><p>The cart has been restored so you can fix it and try again.</p>`,true);
@@ -964,6 +971,12 @@ async function syncCart(){
   syncing=true;
   try{
     const res=await call('syncCart',{lines:cartLines()});
+    const es=evState();
+    if(res.event&&(res.event.id!==es.id||res.event.pk!==es.pk)){
+      await load();
+      const n=repriceCart();
+      toast(res.event.id?(n?`Event prices updated — ${n} cart item${n===1?'':'s'} repriced`:'Event updated'):(n?`Event ended — ${n} cart item${n===1?'':'s'} repriced`:'Event ended'),5000);
+    }
     S.held=res.held||{};
     const msgs=[];
     for(const x of res.rejected||[]){
@@ -988,8 +1001,9 @@ function renderEvBar(){
   if(!S.loaded){bar.className='';return}
   if(ev){
     bar.className='on live';
-    bar.innerHTML=`<span><span class="dot"></span><b>${esc(ev.name)}</b> <span class="muted">· since ${new Date(ev.startedAt).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})}${Object.keys(ev.prices||{}).length?' · event prices on':''}</span></span>${isAdmin()?'<button class="btn sm" id="ev-manage">Manage event</button>':''}`;
+    bar.innerHTML=`<span><span class="dot"></span><b>${esc(ev.name)}</b> <span class="muted">· since ${new Date(ev.startedAt).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})}${Object.keys(ev.prices||{}).length?' · event prices on':''}</span></span><span class="row" style="gap:.4rem"><button class="btn sm" id="ev-money">Event money</button>${isAdmin()?'<button class="btn sm" id="ev-manage">Manage event</button>':''}</span>`;
     const b=$('#ev-manage');if(b)b.onclick=()=>eventModal(ev);
+    $('#ev-money').onclick=()=>eventMoneyModal(ev);
   }else if(isAdmin()){
     bar.className='on idle';
     bar.innerHTML='<span>No event running</span><button class="btn sm" id="ev-start">Start event</button>';
@@ -1013,16 +1027,110 @@ function readPriceList(md){
   md.querySelectorAll('.pricelist tr[data-ids]').forEach(tr=>{const v=tr.querySelector('input').value;if(v!==''&&num(v)>0)tr.dataset.ids.split(',').forEach(id=>out[id]=r2(num(v)))});
   return out;
 }
+function lastFee(k,d){const e=S.events.find(x=>x[k]!=null);return e?num(e[k]):d}
+function payButtons(id,list,sel){return `<div class="seg" id="${id}">${list.map(m=>`<button type="button" data-m="${esc(m)}" class="${m===sel?'on':''}">${esc(m==='Personal'?'Personal (reimburse)':m==='Cash'?'Cash box':m)}</button>`).join('')}</div>`}
+function bindSeg(root,id){const on=root.querySelector('#'+id+' .on');let v=on?on.dataset.m:'';root.querySelector('#'+id).onclick=e=>{const b=e.target.closest('[data-m]');if(!b)return;v=b.dataset.m;root.querySelectorAll('#'+id+' button').forEach(x=>x.classList.toggle('on',x===b));root.dispatchEvent(new Event('segchange'))};return()=>v}
+function eventMoneyModal(ev,fromManage){
+  ev=S.events.find(e=>e.id===ev.id)||ev;
+  const x=eventSummary(ev);
+  const okPays=S.settings.pays.filter(p=>!needsMember(p));
+  const cash=okPays.find(p=>p.trim().toLowerCase()==='cash')||okPays[0]||'';
+  const list=[...x.inc,...x.exp].sort((a,b)=>b.ts-a.ts);
+  const fiftyDone=new Set(x.inc.filter(e=>e.cat==='fifty').map(e=>(e.itemName.match(/#(\d+)/)||[])[1]));
+  openModal(`<h3>Event money · ${esc(ev.name)}</h3>
+    ${ev.endedAt?'<p class="muted" style="margin-top:0">This event has ended — admins can still add missed items.</p>':''}
+    <div class="row" style="gap:.4rem">
+      <button class="btn" data-k="riders">🏍 Riders & passengers</button>
+      <button class="btn" data-k="fifty">50/50</button>
+      <button class="btn" data-k="basket">Basket drawing</button>
+      <button class="btn" data-k="raffle">Cash raffle</button>
+      <button class="btn" data-k="otherinc">Other income</button>
+      <button class="btn pri" data-k="expense">+ Out-of-pocket cost</button>
+    </div>
+    <div class="grid2" style="margin-top:.8rem"><div>${extrasHtml(x)}</div><div><h3 style="font-size:1rem;margin-top:0">Cash box so far</h3>${cashboxHtml(ev,x)}</div></div>
+    <h3 style="margin-top:.8rem">Entries</h3>
+    <div class="tw" style="max-height:30vh;overflow:auto"><table><tbody>${list.length?list.map(e=>`<tr data-id="${esc(e.id)}"><td>${new Date(e.ts).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})}</td><td class="wrap"><b>${esc(e.itemName)}</b>${e.qty?` × ${e.qty}`:''}<div class="muted" style="font-size:.8rem">${esc([e.pay==='Personal'?'Personal':e.pay,e.party,e.note].filter(Boolean).join(' · '))}</div></td><td class="num money ${e.type==='expense'?'neg':'pos'}">${e.type==='expense'?'−':''}${money(num(e.total))}</td><td class="act">${isAdmin()?'<button class="btn sm" data-void>Void</button>':''}</td></tr>`).join(''):'<tr><td class="empty">Nothing recorded yet.</td></tr>'}</tbody></table></div>
+    <div class="row" style="margin-top:1rem;justify-content:flex-end">${fromManage&&isAdmin()&&!ev.endedAt?'<button class="btn" data-back>Back to Manage / End event</button>':''}<button class="btn pri" data-x>Done</button></div>`,md=>{
+    md.querySelector('[data-x]').onclick=closeModal;
+    const bk=md.querySelector('[data-back]');if(bk)bk.onclick=()=>{closeModal();eventModal(S.events.find(e=>e.id===ev.id)||ev)};
+    md.querySelectorAll('[data-k]').forEach(b=>b.onclick=()=>moneyForm(ev,b.dataset.k,{okPays,cash,fiftyDone,fromManage}));
+    md.querySelectorAll('[data-void]').forEach(b=>b.onclick=()=>{
+      const en=S.entries.find(z=>z.id===b.closest('tr').dataset.id);if(!en)return;
+      const why=prompt(`Void “${en.itemName}” ${money(num(en.total))}? Reason:`);if(!why)return;
+      write('voidEntry',{id:en.id,reason:why},'Entry voided').then(ok=>{if(ok)eventMoneyModal(ev,fromManage)});
+    });
+  });
+  $('#md').style.maxWidth='760px';
+}
+function moneyForm(ev,kind,o){
+  const outs=[...o.okPays,'Personal'];
+  const nextFifty=[1,2,3,4,5,6].find(n=>!o.fiftyDone.has(String(n)))||1;
+  const title={riders:'Riders & passengers',fifty:'50/50 drawing',basket:'Basket drawing tickets',raffle:'Cash raffle',otherinc:'Other income',expense:'Out-of-pocket cost'}[kind];
+  const money$=(id,lbl,ph)=>`<label for="${id}">${lbl}</label><input id="${id}" type="number" step="0.01" min="0" inputmode="decimal" placeholder="${ph||''}">`;
+  let body='';
+  if(kind==='riders')body=`<div class="row"><div class="grow"><label for="mf-r">Riders <span class="muted">× ${money(num(ev.riderFee))}</span></label><input id="mf-r" type="number" min="0" step="1" inputmode="numeric" placeholder="0"></div>
+    <div class="grow"><label for="mf-p">Passengers <span class="muted">× ${money(num(ev.passengerFee))}</span></label><input id="mf-p" type="number" min="0" step="1" inputmode="numeric" placeholder="0"></div></div>
+    <label>Paid with</label>${payButtons('mf-pay',o.okPays,o.cash)}<p id="mf-tot" class="total" style="font-size:1.4rem"></p>
+    <p class="muted" style="font-size:.85rem">Record at the sign-in table as people register, or all at once at the end.</p>`;
+  if(kind==='fifty')body=`<label>Drawing</label><div class="seg" id="mf-n">${[1,2].map(n=>`<button type="button" data-m="${n}" class="${n===Math.min(nextFifty,2)?'on':''}">#${n}${o.fiftyDone.has(String(n))?' ✓':''}</button>`).join('')}</div>
+    ${money$('mf-c','Total collected ($)')}${money$('mf-o','Winner payout ($)','Half of collected')}
+    <label for="mf-w">Winner</label><input id="mf-w" placeholder="Name">
+    <label>Tickets paid with</label>${payButtons('mf-pay',o.okPays,o.cash)}
+    <label>Payout paid from</label>${payButtons('mf-from',outs,o.cash)}<p id="mf-tot" class="muted"></p>`;
+  if(kind==='basket')body=`${money$('mf-c','Ticket sales ($)')}<label>Paid with</label>${payButtons('mf-pay',o.okPays,o.cash)}`;
+  if(kind==='raffle')body=`${money$('mf-c','Tickets collected ($)')}${money$('mf-o','Cash prize paid ($)')}
+    <label for="mf-w">Winner</label><input id="mf-w" placeholder="Name">
+    <label>Tickets paid with</label>${payButtons('mf-pay',o.okPays,o.cash)}
+    <label>Prize paid from</label>${payButtons('mf-from',outs,o.cash)}<p id="mf-tot" class="muted"></p>`;
+  if(kind==='otherinc')body=`<label for="mf-l">Description</label><input id="mf-l" placeholder="e.g. Donation, food sales">${money$('mf-a','Amount ($)')}<label>Paid with</label>${payButtons('mf-pay',o.okPays,o.cash)}`;
+  if(kind==='expense')body=`<label for="mf-l">What for</label><input id="mf-l" list="mf-picks" placeholder="e.g. Ice"><datalist id="mf-picks">${['Ice','Food','Drinks','Supplies','Gas','Prizes','Tickets / wristbands','Signs','Venue','Other'].map(v=>`<option value="${v}">`).join('')}</datalist>
+    ${money$('mf-a','Amount ($)')}<label>Paid from</label>${payButtons('mf-from',outs,o.cash)}
+    <div id="mf-byw" style="display:none"><label for="mf-by">Who paid (to reimburse)</label><input id="mf-by" list="c-members" placeholder="Name"></div>
+    <label for="mf-n2">Note (optional)</label><input id="mf-n2" placeholder="e.g. receipt in box">`;
+  openModal(`<h3>${title}</h3><div id="mf-root">${body}<div class="row" style="margin-top:1rem;justify-content:flex-end"><button class="btn" data-x>Back</button><button class="btn pri" data-ok>Record</button></div></div>`,md=>{
+    const root=md.querySelector('#mf-root');
+    const g=id=>root.querySelector('#'+id),v=id=>g(id)?g(id).value:'';
+    const pay=g('mf-pay')?bindSeg(root,'mf-pay'):()=>'',from=g('mf-from')?bindSeg(root,'mf-from'):()=>'',nsel=g('mf-n')?bindSeg(root,'mf-n'):()=>'';
+    const back=()=>eventMoneyModal(ev,o.fromManage);
+    md.querySelector('[data-x]').onclick=back;
+    const upd=()=>{
+      if(kind==='riders')g('mf-tot').textContent=`Total ${money(Math.round(num(v('mf-r')))*num(ev.riderFee)+Math.round(num(v('mf-p')))*num(ev.passengerFee))}`;
+      if(kind==='fifty'){if(!g('mf-o').dataset.touched)g('mf-o').value=v('mf-c')?(Math.floor(num(v('mf-c'))*50)/100).toFixed(2):'';g('mf-tot').textContent=v('mf-c')?`Club keeps ${money(num(v('mf-c'))-num(v('mf-o')))}`:''}
+      if(kind==='raffle')g('mf-tot').textContent=v('mf-c')?`Club keeps ${money(num(v('mf-c'))-num(v('mf-o')))}`:'';
+      if(kind==='expense')g('mf-byw').style.display=from()==='Personal'?'':'none';
+    };
+    root.addEventListener('input',e=>{if(e.target.id==='mf-o')e.target.dataset.touched='1';upd()});
+    root.addEventListener('segchange',upd);upd();
+    md.querySelector('[data-ok]').onclick=async()=>{
+      const a={eventId:ev.id,kind,pay:pay()};
+      if(kind==='riders'){a.riders=Math.round(num(v('mf-r')));a.passengers=Math.round(num(v('mf-p')));if(!a.riders&&!a.passengers){toast('Enter riders or passengers');return}}
+      if(kind==='fifty'){a.drawing=+nsel();a.collected=r2(num(v('mf-c')));a.payout=r2(num(v('mf-o')));a.winner=v('mf-w').trim();a.payoutFrom=from()}
+      if(kind==='basket')a.collected=r2(num(v('mf-c')));
+      if(kind==='raffle'){a.collected=r2(num(v('mf-c')));a.prize=r2(num(v('mf-o')));a.winner=v('mf-w').trim();a.prizeFrom=from()}
+      if(kind==='otherinc'){a.label=v('mf-l').trim();a.amount=r2(num(v('mf-a')))}
+      if(kind==='expense'){a.label=v('mf-l').trim();a.amount=r2(num(v('mf-a')));a.paidFrom=from();a.paidBy=v('mf-by').trim();a.note=v('mf-n2').trim();
+        if(a.paidFrom==='Personal'&&!a.paidBy){toast('Enter who paid');g('mf-by').focus();return}}
+      if((kind==='fifty'||kind==='basket'||kind==='raffle')&&!(a.collected>0)){toast('Enter the amount collected');return}
+      if((kind==='otherinc'||kind==='expense')&&(!a.label||!(a.amount>0))){toast('Enter a description and amount');return}
+      if(await write('recordEventMoney',a,`${title} recorded`))back();
+    };
+  });
+}
 function eventModal(ev){
   if(!isAdmin())return;
   const isNew=!ev,isLive=!!(ev&&!ev.endedAt);
   const x=ev?eventSummary(ev):null;
   openModal(`<h3>${isNew?'Start event':isLive?'Manage event':'Edit event'}</h3>
     <label for="ev-name">Event name</label><input id="ev-name" value="${esc(ev?ev.name:'')}" placeholder="e.g. Poker Run 2026">
+    <div class="row"><div class="grow"><label for="ev-rfee">Rider fee ($)</label><input id="ev-rfee" type="number" step="0.01" min="0" inputmode="decimal" value="${num(ev?ev.riderFee:lastFee('riderFee',35)).toFixed(2)}"></div>
+    <div class="grow"><label for="ev-pfee">Passenger fee ($)</label><input id="ev-pfee" type="number" step="0.01" min="0" inputmode="decimal" value="${num(ev?ev.passengerFee:lastFee('passengerFee',15)).toFixed(2)}"></div></div>
     <label for="ev-open">Opening cash in box ($)</label><input id="ev-open" type="number" step="0.01" min="0" inputmode="decimal" value="${ev&&ev.openingCash!=null?num(ev.openingCash).toFixed(2):''}" placeholder="Optional — starting float">
     ${isNew||isLive?`<label class="row" style="color:var(--ink);margin-top:.8rem"><input type="checkbox" id="ev-useprices" style="width:auto;min-height:0" ${ev&&Object.keys(ev.prices||{}).length?'checked':''}> Use event prices</label>
     <div id="ev-prices" style="display:${ev&&Object.keys(ev.prices||{}).length?'':'none'}">${priceListHtml(ev?ev.prices:{})}</div>`:''}
-    ${isLive?`<h3 style="margin-top:1.2rem">End event</h3>${cashboxHtml(ev,x)}
+    ${ev?`<div class="row" style="margin-top:.8rem"><button class="btn" data-money>Event money (fees, 50/50, raffles, costs)…</button></div>`:''}
+    ${isLive?`<h3 style="margin-top:1.2rem">End event</h3>
+      <p class="muted" style="margin:.2rem 0">Before ending, record rider fees, 50/50s, basket drawing, raffle and out-of-pocket costs under <b>Event money</b>.</p>
+      ${cashboxHtml(ev,x)}
       <label for="ev-close">Counted cash in box ($)</label><input id="ev-close" type="number" step="0.01" min="0" inputmode="decimal" placeholder="Count the box, then enter it">
       <div id="ev-diff" class="muted" style="margin-top:.2rem"></div>
       <label for="ev-notes">Notes</label><input id="ev-notes" placeholder="Optional">`:''}
@@ -1040,18 +1148,20 @@ function eventModal(ev){
     if(isLive){
       const upd=()=>{const v=g('ev-close').value;if(v===''){g('ev-diff').textContent='';return}
         const opening=g('ev-open').value===''?0:num(g('ev-open').value);
-        const exp=r2(opening+x.cs+x.cship+x.cpay),d=r2(num(v)-exp);
+        const exp=r2(opening+x.cs+x.cship+x.cpay+x.cinc-x.cexp),d=r2(num(v)-exp);
         g('ev-diff').innerHTML=d===0?'<span class="pos">Balanced ✓</span>':`<span class="${d<0?'neg':'pos'}">${d<0?'Short':'Over'} ${money(Math.abs(d))}</span> <span class="muted">(expected ${money(exp)})</span>`};
       g('ev-close').addEventListener('input',upd);g('ev-open').addEventListener('input',upd);
     }
     md.querySelector('[data-save]').onclick=async()=>{
       const evName=g('ev-name').value.trim();if(!evName){g('ev-name').focus();return}
-      if(isNew){if(await write('startEvent',{evName,openingCash:openVal(),prices:prices()},`Event started · ${evName}`))closeModal();return}
-      const arg={id:ev.id,evName,openingCash:openVal()};
+      const fees={riderFee:g('ev-rfee').value===''?'':r2(num(g('ev-rfee').value)),passengerFee:g('ev-pfee').value===''?'':r2(num(g('ev-pfee').value))};
+      if(isNew){if(await write('startEvent',Object.assign({evName,openingCash:openVal(),prices:prices()},fees),`Event started · ${evName}`))closeModal();return}
+      const arg=Object.assign({id:ev.id,evName,openingCash:openVal()},fees);
       if(isLive)arg.prices=prices();
       else{arg.closingCash=g('ev-close').value===''?'':r2(num(g('ev-close').value));arg.notes=g('ev-notes').value.trim()}
       if(await write('updateEvent',arg,'Event updated'))closeModal();
     };
+    const mb=md.querySelector('[data-money]');if(mb)mb.onclick=()=>{closeModal();eventMoneyModal(ev,true)};
     const end=md.querySelector('[data-end]');
     if(end)end.onclick=async()=>{
       const evName=g('ev-name').value.trim()||ev.name;
@@ -1306,6 +1416,9 @@ function inPeriod(e,m){
   if(m.indexOf('ev:')===0)return e.event===m.slice(3);
   return monthKey(new Date(e.ts))===m;
 }
+const priceKey=pr=>Object.keys(pr||{}).sort().map(k=>k+':'+pr[k]).join('|');
+const evState=()=>S.activeEvent?{id:S.activeEvent.id,pk:priceKey(S.activeEvent.prices)}:{id:'',pk:''};
+function repriceCart(){let n=0;for(const l of S.cart.values()){const it=S.items.get(l.id);if(l.auto!==false&&it){const p=effPrice(it);if(p!==l.price){l.price=p;n++}}}return n}
 const eventName=id=>{const e=S.events.find(x=>x.id===id);return e?e.name:''};
 function shipModal(saleId){
   const lines=S.entries.filter(e=>e.sale===saleId&&e.type==='sale'&&!S.voided.has(e.id));
@@ -1372,7 +1485,7 @@ function renderLedger(){
   for(const e of rows)if(e.type==='sale'&&e.sale&&!S.voided.has(e.id)&&!firstOfSale[e.sale])firstOfSale[e.sale]=e.id;
   $('#lg-body').innerHTML=rows.length?rows.slice(0,1000).map(e=>{
     const v=S.voided.has(e.id),d=new Date(e.ts);
-    const amt=e.type==='sale'||e.type==='payment'||e.type==='shipping'?e.total:e.type==='receive'?-e.total:null;
+    const amt=e.type==='sale'||e.type==='payment'||e.type==='shipping'||e.type==='income'?e.total:(e.type==='receive'||e.type==='expense')?-e.total:null;
     const qty=e.type==='void'?'':`<span class="${e.qty>0?'pos':'neg'}">${e.qty>0?'+':''}${e.qty}</span>`;
     return `<tr class="${v?'voided':''}" data-id="${esc(e.id)}"><td>${d.toLocaleDateString()} <span class="muted">${d.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})}</span></td>
     <td><span class="tag t-${esc(e.type)}">${TYPES[e.type]||esc(e.type)}</span></td><td>${esc(e.itemName)}</td><td class="num">${qty}</td>
@@ -1415,8 +1528,33 @@ function eventSummary(ev){
   const opening=ev.openingCash==null?0:num(ev.openingCash);
   const expected=r2(opening+cs+cship+cpay);
   const diff=ev.closingCash==null?null:r2(num(ev.closingCash)-expected);
+  const inc=es.filter(e=>e.type==='income'),exp=es.filter(e=>e.type==='expense');
+  const sumK=(arr,k)=>arr.filter(e=>e.cat===k).reduce((s,e)=>s+num(e.total),0);
+  const cntK=k=>inc.filter(e=>e.cat===k).reduce((s,e)=>s+num(e.qty),0);
+  const cinc=inc.filter(isCash).reduce((s,e)=>s+num(e.total),0);
+  const cexp=exp.filter(isCash).reduce((s,e)=>s+num(e.total),0);
+  const incTot=inc.reduce((s,e)=>s+num(e.total),0),payouts=sumK(exp,'payout'),costs=sumK(exp,'expense');
+  const expected2=r2(expected+cinc-cexp);
+  const diff2=ev.closingCash==null?null:r2(num(ev.closingCash)-expected2);
+  const reimb={};for(const e of exp)if(e.pay==='Personal'){const k=e.party||'?';reimb[k]=(reimb[k]||0)+num(e.total)}
   const tabs=es.filter(e=>isCharge(e)).reduce((s,e)=>s+num(e.total),0);
-  return {sales,rev,cogs,cs,cship,cpay,opening,expected,diff,tabs,count:new Set(sales.map(e=>e.sale||e.id)).size,cashName};
+  return {sales,rev,cogs,cs,cship,cpay,opening,expected:expected2,diff:diff2,tabs,count:new Set(sales.map(e=>e.sale||e.id)).size,cashName,
+    inc,exp,cinc,cexp,incTot,payouts,costs,reimb,
+    riders:cntK('riders'),passengers:cntK('passengers'),ridersAmt:sumK(inc,'riders'),passAmt:sumK(inc,'passengers'),
+    fifty:sumK(inc,'fifty'),basket:sumK(inc,'basket'),raffle:sumK(inc,'raffle'),otherinc:sumK(inc,'otherinc'),
+    net:r2((rev-cogs)+incTot-payouts-costs)};
+}
+function extrasHtml(x){
+  const row=(l,v,extra)=>v?`<span>${l}${extra?` <span class="muted">${extra}</span>`:''}</span><span class="money">${money(v)}</span>`:'';
+  const reimb=Object.entries(x.reimb);
+  return `<div class="cashbox">
+    ${row('Rider fees',x.ridersAmt,x.riders?`(${x.riders})`:'')}${row('Passenger fees',x.passAmt,x.passengers?`(${x.passengers})`:'')}
+    ${row('50/50 tickets',x.fifty)}${row('Basket drawing',x.basket)}${row('Cash raffle',x.raffle)}${row('Other income',x.otherinc)}
+    ${x.payouts?`<span>− Payouts / prizes</span><span class="money">−${money(x.payouts)}</span>`:''}
+    ${x.costs?`<span>− Costs</span><span class="money">−${money(x.costs)}</span>`:''}
+    <span>Merch profit</span><span class="money">${money(x.rev-x.cogs)}</span>
+    <span class="tot">Event net</span><span class="tot money ${x.net<0?'neg':''}">${money(x.net)}</span>
+  </div>${reimb.length?`<p style="margin:.4rem 0 0"><b>Reimburse:</b> ${reimb.map(([k,v])=>`${esc(k)} ${money(v)}`).join(' · ')}</p>`:''}`;
 }
 function cashboxHtml(ev,x){
   return `<div class="cashbox">
@@ -1424,6 +1562,8 @@ function cashboxHtml(ev,x){
     <span>+ Cash sales</span><span class="money">${money(x.cs)}</span>
     ${x.cship?`<span>+ Cash shipping</span><span class="money">${money(x.cship)}</span>`:''}
     ${x.cpay?`<span>+ Cash tab payments</span><span class="money">${money(x.cpay)}</span>`:''}
+    ${x.cinc?`<span>+ Cash event income</span><span class="money">${money(x.cinc)}</span>`:''}
+    ${x.cexp?`<span>− Paid from cash box</span><span class="money">−${money(x.cexp)}</span>`:''}
     <span class="tot">Expected in cash box</span><span class="tot money">${money(x.expected)}</span>
     ${ev.closingCash!=null?`<span>Counted</span><span class="money">${money(num(ev.closingCash))}</span>
     <span class="tot">${x.diff===0?'Balanced':x.diff>0?'Over':'Short'}</span><span class="tot money ${x.diff<0?'neg':x.diff>0?'pos':''}">${x.diff===0?'✓':money(Math.abs(x.diff))}</span>`:''}
@@ -1441,10 +1581,11 @@ function renderReports(){
       <div class="row" style="justify-content:space-between"><h3 style="margin:0">${selEv.endedAt?'':'<span class="dot" style="display:inline-block;width:.6rem;height:.6rem;border-radius:50%;background:var(--ok);margin-right:.4rem"></span>'}${esc(selEv.name)}</h3>${isAdmin()?`<button class="btn sm" data-evedit="${esc(selEv.id)}">${selEv.endedAt?'Edit':'Manage'}</button>`:''}</div>
       <p class="muted" style="margin:.2rem 0 .6rem">${new Date(selEv.startedAt).toLocaleString()} → ${selEv.endedAt?new Date(selEv.endedAt).toLocaleString():'running'} · ${dur.toFixed(1)} h · started by ${esc(selEv.startedBy)}${selEv.notes?` · ${esc(selEv.notes)}`:''}</p>
       <div class="grid2"><div><h3 style="font-size:1rem">Cash box</h3>${cashboxHtml(selEv,x)}</div>
+      <div><h3 style="font-size:1rem">Event money</h3>${extrasHtml(x)}${!selEv.endedAt||isAdmin()?`<button class="btn sm" style="margin-top:.4rem" data-evmoney="${esc(selEv.id)}">Add income / cost</button>`:''}</div>
       <div><h3 style="font-size:1rem">At this event</h3><div class="cashbox"><span>Sales</span><span>${x.count}</span><span>Revenue</span><span class="money">${money(x.rev)}</span><span>Profit</span><span class="money">${money(x.rev-x.cogs)}</span><span>Charged to tabs</span><span class="money">${money(x.tabs)}</span><span>Event prices set</span><span>${Object.keys(selEv.prices||{}).length} items</span></div></div></div>
     </div>`;
   }else $('#rp-event').innerHTML='';
-  $('#rp-events').innerHTML=S.events.length?S.events.map(ev=>{const x=eventSummary(ev);return `<tr><td><button type="button" class="linkish" data-evsel="${esc(ev.id)}"><b>${esc(ev.name)}</b></button><div class="muted" style="font-size:.8rem">${ev.endedAt?'':'● running · '}${new Date(ev.startedAt).toLocaleDateString()}</div></td><td class="num">${x.count}</td><td class="num money">${money(x.rev)}</td><td class="num money">${money(x.rev-x.cogs)}</td><td class="num money ${x.diff<0?'neg':x.diff>0?'pos':''}">${x.diff==null?'—':x.diff===0?'✓':(x.diff>0?'+':'−')+money(Math.abs(x.diff))}</td></tr>`}).join('')
+  $('#rp-events').innerHTML=S.events.length?S.events.map(ev=>{const x=eventSummary(ev);return `<tr><td><button type="button" class="linkish" data-evsel="${esc(ev.id)}"><b>${esc(ev.name)}</b></button><div class="muted" style="font-size:.8rem">${ev.endedAt?'':'● running · '}${new Date(ev.startedAt).toLocaleDateString()}</div></td><td class="num">${x.count}</td><td class="num money">${money(x.rev)}</td><td class="num money ${x.net<0?'neg':''}">${money(x.net)}</td><td class="num money ${x.diff<0?'neg':x.diff>0?'pos':''}">${x.diff==null?'—':x.diff===0?'✓':(x.diff>0?'+':'−')+money(Math.abs(x.diff))}</td></tr>`}).join('')
     :'<tr><td colspan="5" class="empty">No events yet.</td></tr>';
   const sales=es.filter(e=>e.type==='sale');
   const rev=sales.reduce((s,e)=>s+num(e.total),0);
@@ -1484,12 +1625,15 @@ function renderReports(){
   $('#rp-ptype').innerHTML=[['regular','Regular'],['sale','Sale'],['event','Event price'],['override','Changed at checkout']].map(([k,l])=>`<tr><td>${l}</td><td class="num">${pt[k].u}</td><td class="num money">${money(pt[k].r)}</td><td class="num money">${pt[k].d?money(pt[k].d):'—'}</td></tr>`).join('')+
     `<tr><td><b>Total</b></td><td class="num"><b>${units}</b></td><td class="num money"><b>${money(rev)}</b></td><td class="num money"><b>${money(disc)}</b></td></tr>`;
   const outstanding=[...tabs().values()].reduce((s,t)=>s+Math.max(0,t.balance),0);
+  const oInc=es.filter(e=>e.type==='income').reduce((s,e)=>s+num(e.total),0),oExp=es.filter(e=>e.type==='expense').reduce((s,e)=>s+num(e.total),0);
+  if(oInc||oExp)$('#rp-stats').insertAdjacentHTML('beforeend',`<div class="card stat"><div class="v money">${money(oInc)}</div><div class="l">Event income (fees, 50/50, raffles)</div></div><div class="card stat"><div class="v money neg">${money(oExp)}</div><div class="l">Costs & payouts</div></div>`);
   $('#rp-stats').insertAdjacentHTML('beforeend',`<div class="card stat"><div class="v money">${money(disc)}</div><div class="l">Discounts given</div></div><div class="card stat"><div class="v money">${money(shipTot)}</div><div class="l">Shipping collected (not in revenue)</div></div><div class="card stat"><div class="v money ${outstanding>0?'neg':''}">${money(outstanding)}</div><div class="l">Tabs outstanding (all time)</div></div>`);
   $('#rp-shrink').innerHTML=Object.entries(sh).map(([k,x])=>`<tr><td>${TYPES[k]}</td><td class="num ${x.u<0?'neg':''}">${x.u}</td><td class="num money">${money(x.v)}</td></tr>`).join('');
 }
 $('#rp-month').addEventListener('input',renderReports);
 $('#rp-events').addEventListener('click',e=>{const b=e.target.closest('[data-evsel]');if(!b)return;wantPeriod='ev:'+b.dataset.evsel;renderReports();window.scrollTo({top:0,behavior:'smooth'})});
-$('#rp-event').addEventListener('click',e=>{const b=e.target.closest('[data-evedit]');if(!b)return;const ev=S.events.find(x=>x.id===b.dataset.evedit);if(ev)eventModal(ev)});
+$('#rp-event').addEventListener('click',e=>{
+  const m=e.target.closest('[data-evmoney]');if(m){const ev=S.events.find(x=>x.id===m.dataset.evmoney);if(ev)eventMoneyModal(ev);return}const b=e.target.closest('[data-evedit]');if(!b)return;const ev=S.events.find(x=>x.id===b.dataset.evedit);if(ev)eventModal(ev)});
 $('#rp-top').addEventListener('click',e=>{const d=e.target.closest('[data-detail]');if(d)itemDetail(d.dataset.detail)});
 
 
