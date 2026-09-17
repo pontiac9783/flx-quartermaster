@@ -1394,7 +1394,8 @@ function shiftTotals(sh){
   const cashName=(S.settings.pays||[]).find(p=>p.trim().toLowerCase()==='cash')||'';
   const tabPays=es.filter(e=>e.type==='payment');
   const cashPays=tabPays.filter(e=>e.pay===cashName).reduce((s,e)=>s+num(e.total),0);
-  const cash=r2(sales.filter(e=>e.pay===cashName).reduce((s,e)=>s+num(e.total),0)+cashPays);
+  const cashOut=r2(es.filter(e=>e.type==='expense'&&e.pay===cashName).reduce((s,e)=>s+num(e.total),0));
+  const cash=r2(sales.filter(e=>e.pay===cashName).reduce((s,e)=>s+num(e.total),0)+cashPays-cashOut);
   const tabbed=sales.filter(e=>e.onTab);
   const tabTot=tabbed.reduce((s,e)=>s+num(e.total),0);
   const other=sales.reduce((s,e)=>s+num(e.total),0)-cash-tabTot;
@@ -1407,7 +1408,7 @@ function shiftTotals(sh){
   const opening=sh&&sh.openingCash!=null?num(sh.openingCash):0;
   const compVal=r2(comps.reduce((s,e)=>{const i=S.items.get(e.itemId);return s+(i?num(i.price):0)},0));
   const tabPaid=r2(tabPays.reduce((s,e)=>s+num(e.total),0));
-  return {es,sales,comps,compVal,cash,cashPays,tabPays,tabPaid,tabbed,tabTot,other,byTab,byItem,opening,expected:r2(opening+cash),cashName};
+  return {es,sales,comps,compVal,cash,cashPays,cashOut,tabPays,tabPaid,tabbed,tabTot,other,byTab,byItem,opening,expected:r2(opening+cash),cashName};
 }
 function barNightModal(){
   const sh=S.shift;
@@ -1426,7 +1427,7 @@ function barNightModal(){
   openModal(`<h3>Tonight · ${esc(sh.bartender)}</h3>
     <p class="muted" style="margin-top:0">Open since ${new Date(sh.openedAt).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})}${sh.event?' · '+esc(eventName(sh.event)):''}</p>
     <div class="stats">
-      <div class="card stat"><div class="v money">${money(x.cash)}</div><div class="l">Cash taken${x.cashPays?` · incl. ${money(x.cashPays)} tab payments`:''}</div></div>
+      <div class="card stat"><div class="v money">${money(x.cash)}</div><div class="l">Net cash${x.cashPays?` · incl. ${money(x.cashPays)} tab payments`:''}${x.cashOut?` · less ${money(x.cashOut)} paid out`:''}</div></div>
       <div class="card stat"><div class="v money">${money(r2(x.tabTot-x.tabPaid))}</div><div class="l">Net on tabs · ${x.tabbed.length} drink${x.tabbed.length===1?'':'s'}${x.tabPaid?` · ${money(x.tabPaid)} paid back`:''}</div></div>
       <div class="card stat"><div class="v money">${money(x.expected)}</div><div class="l">Expected in bar box${sh.openingCash!=null?` (incl. ${money(x.opening)} start)`:''}</div></div>
       <div class="card stat"><div class="v">${x.sales.length}</div><div class="l">Drinks poured</div></div>
@@ -1599,7 +1600,8 @@ function shiftModal(sh){
   const sales=es.filter(e=>e.type==='sale');
   const cashName=(S.settings.pays||[]).find(p=>p.trim().toLowerCase()==='cash')||'';
   const cashPays=es.filter(e=>e.type==='payment'&&e.pay===cashName).reduce((s,e)=>s+num(e.total),0);
-  const cash=r2(sales.filter(e=>e.pay===cashName).reduce((s,e)=>s+num(e.total),0)+cashPays);
+  const cashOut=r2(es.filter(e=>e.type==='expense'&&e.pay===cashName).reduce((s,e)=>s+num(e.total),0));
+  const cash=r2(sales.filter(e=>e.pay===cashName).reduce((s,e)=>s+num(e.total),0)+cashPays-cashOut);
   const tabs=sales.filter(e=>e.onTab).reduce((s,e)=>s+num(e.total),0);
   const other=sales.reduce((s,e)=>s+num(e.total),0)-cash-tabs;
   const comps=es.filter(e=>e.type==='comp').length;
@@ -1613,7 +1615,7 @@ function shiftModal(sh){
     :`<p class="muted" style="margin-top:0">${esc(sh.bartender)} · opened ${new Date(sh.openedAt).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})}${sh.event?' · '+esc(eventName(sh.event)):''}</p>
       <div class="cashbox">
         <span>Opening cash</span><span class="money">${sh.openingCash==null?'—':money(opening)}</span>
-        <span>+ Cash donations${cashPays?' &amp; tab payments':''}</span><span class="money">${money(cash)}</span>
+        <span>+ Cash donations${cashPays?' &amp; tab payments':''}${cashOut?' − paid out':''}</span><span class="money">${money(cash)}</span>
         <span class="tot">Expected in bar box</span><span class="tot money">${money(expected)}</span>
         <span>On tabs</span><span class="money">${money(tabs)}</span>
         ${other?`<span>Other methods</span><span class="money">${money(other)}</span>`:''}
@@ -1655,17 +1657,36 @@ function receiveModal(preId){
     <input id="rc-q" type="search" data-nodirty placeholder="Search item, size, SKU — or pick below" autocomplete="off">
     <div id="rc-sug" class="chips" style="margin:.4rem 0 0"></div>
     <div class="tw" style="margin-top:.6rem;max-height:42vh;overflow:auto"><table class="rcv"><thead><tr><th>Item</th><th class="num">On hand</th><th>Receiving</th><th class="num">Unit cost</th><th class="act"></th></tr></thead><tbody id="rc-body"></tbody></table></div>
-    <label for="rc-note">Note (supplier, invoice, who paid)</label><input id="rc-note" placeholder="e.g. beer run — paid by Tank">
+    <label>Paid by</label>
+    <div class="seg" id="rc-paid"><button type="button" data-p="treasurer" class="on">Treasurer / club account</button><button type="button" data-p="cash">Cash drawer</button><button type="button" data-p="Personal">Personal (reimburse)</button></div>
+    <div id="rc-paid-extra"></div>
+    <label for="rc-note">Note (supplier, invoice #)</label><input id="rc-note" placeholder="e.g. Sam's Club run">
     <p id="rc-sum" class="muted"></p>
     <div class="row" style="margin-top:.6rem;justify-content:flex-end"><button class="btn" data-x>Cancel</button><button class="btn pri" data-ok>Save all</button></div>`,md=>{
     const q=md.querySelector('#rc-q'),sug=md.querySelector('#rc-sug'),body=md.querySelector('#rc-body'),sum=md.querySelector('#rc-sum');
+    let paid='treasurer',till=S.shift?'bar':'merch';
+    const extra=md.querySelector('#rc-paid-extra');
+    const drawPaid=()=>{
+      md.querySelectorAll('#rc-paid button').forEach(b=>b.classList.toggle('on',b.dataset.p===paid));
+      if(paid==='treasurer'){extra.innerHTML='<p class="muted" style="font-size:.85rem;margin:.3rem 0 0">Stock cost is recorded; no money leaves a drawer.</p>';return}
+      if(paid==='Personal'){extra.innerHTML=`<label for="rc-by">Who paid (to reimburse)</label><input id="rc-by" list="c-members" placeholder="Name">`;return}
+      extra.innerHTML=`<label>Which drawer?</label><div class="seg" id="rc-till"><button type="button" data-t="bar" class="${till==='bar'?'on':''}">🍻 Bar box${S.shift?` (${esc(S.shift.bartender)}’s shift)`:''}</button><button type="button" data-t="merch" class="${till==='merch'?'on':''}">👕 Merch / QM</button></div>`;
+      md.querySelector('#rc-till').onclick=e=>{const b=e.target.closest('[data-t]');if(!b)return;till=b.dataset.t;md.querySelectorAll('#rc-till button').forEach(x=>x.classList.toggle('on',x===b))};
+    };
+    md.querySelector('#rc-paid').onclick=e=>{const b=e.target.closest('[data-p]');if(!b)return;paid=b.dataset.p;drawPaid();tally()};
+    drawPaid();
     const add=id=>{if(!rows.has(id))rows.set(id,{qty:'',cost:''});q.value='';draw();setTimeout(()=>{const el=body.querySelector(`tr[data-id="${id}"] .qi`);if(el){el.focus();el.select()}},20)};
+    let showAll=false;
     const drawSug=()=>{
       const s=q.value.trim().toLowerCase();
-      const pool=s?all().filter(i=>(label(i)+' '+(i.sku||'')).toLowerCase().includes(s)):lowFirst();
-      const list=pool.filter(i=>!rows.has(i.id)).slice(0,8);
-      sug.innerHTML=(s?'':'<span class="muted" style="align-self:center;margin-right:.3rem">Low stock:</span>')+
-        (list.length?list.map(i=>`<button type="button" class="chip" data-add="${esc(i.id)}">${esc(label(i))}${isPour(i)?' <span class="muted">btl</span>':''}</button>`).join(''):(s?'<span class="muted">No match</span>':'<span class="muted">nothing below reorder level</span>'));
+      let pool;
+      if(s)pool=all().filter(i=>(label(i)+' '+(i.sku||'')).toLowerCase().includes(s));
+      else{const low=lowFirst();pool=[...low,...all().filter(i=>!low.includes(i))]}
+      const avail=pool.filter(i=>!rows.has(i.id));
+      const list=showAll||s?avail:avail.slice(0,10);
+      sug.innerHTML=(s?'':'<span class="muted" style="align-self:center;margin-right:.3rem">Tap to add · low stock first:</span>')+
+        (list.length?list.map(i=>`<button type="button" class="chip" data-add="${esc(i.id)}">${esc(label(i))}${onHand(i.id)<=0?' <span class="muted">out</span>':''}${isPour(i)?' <span class="muted">btl</span>':''}</button>`).join(''):(s?'<span class="muted">No match</span>':'<span class="muted">No items yet</span>'))+
+        ((!s&&!showAll&&avail.length>10)?`<button type="button" class="chip" data-all>+${avail.length-10} more…</button>`:'');
     };
     const draw=()=>{
       body.innerHTML=[...rows.keys()].map(id=>{
@@ -1684,11 +1705,14 @@ function receiveModal(preId){
       rows.forEach((r,id)=>{const i=S.items.get(id);if(!i)return;const qty=Math.round(num(r.qty));if(qty<=0)return;
         const per=isPour(i)?(num(r.cost)||r2(num(i.cost)*i.pours)):(num(r.cost)||num(i.cost));
         n+=qty;cost+=qty*per});
-      sum.textContent=n?`${n} ${n===1?'unit':'units'} · ${money(r2(cost))}`:'';
+      sum.textContent=n?`${n} ${n===1?'unit':'units'} · ${money(r2(cost))}${paid==='cash'?` out of the ${till==='bar'?'bar box':'merch drawer'}`:paid==='Personal'?' to reimburse':''}`:'';
     };
     q.addEventListener('input',drawSug);
     q.addEventListener('keydown',e=>{if(e.key!=='Enter')return;e.preventDefault();const b=sug.querySelector('[data-add]');if(b)add(b.dataset.add)});
-    sug.addEventListener('click',e=>{const b=e.target.closest('[data-add]');if(b)add(b.dataset.add)});
+    sug.addEventListener('click',e=>{
+      if(e.target.closest('[data-all]')){showAll=true;drawSug();return}
+      const b=e.target.closest('[data-add]');if(b)add(b.dataset.add);
+    });
     body.addEventListener('click',e=>{
       const tr=e.target.closest('tr[data-id]');if(!tr)return;
       if(e.target.closest('[data-rm]')){rows.delete(tr.dataset.id);draw();return}
@@ -1716,7 +1740,11 @@ function receiveModal(preId){
       if(!lines.length){toast('Enter how many you received');return}
       const btn=md.querySelector('[data-ok]');btn.disabled=true;btn.textContent='Saving…';
       try{
-        const res=await call('receiveBatch',{name:who(),lines,note:md.querySelector('#rc-note').value.trim()});
+        const cashName=(S.settings.pays||[]).find(x=>x.trim().toLowerCase()==='cash')||(S.settings.pays||[])[0]||'Cash';
+        const paidBy=md.querySelector('#rc-by')?md.querySelector('#rc-by').value.trim():'';
+        if(paid==='Personal'&&!paidBy){toast('Enter who paid');md.querySelector('#rc-by').focus();btn.disabled=false;btn.textContent='Save all';return}
+        const res=await call('receiveBatch',{name:who(),lines,note:md.querySelector('#rc-note').value.trim(),
+          paidFrom:paid==='treasurer'?'treasurer':(paid==='Personal'?'Personal':cashName),till,paidBy});
         if(res.items)S.items=new Map(res.items.map(i=>[i.id,i]));
         S.entries=S.entries.concat(res.added||[]).sort((a,b)=>b.ts-a.ts);
         recomputeStock();closeModal();refresh();
