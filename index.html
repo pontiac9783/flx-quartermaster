@@ -114,6 +114,8 @@ table{border-collapse:collapse;width:100%;font-size:.95rem}
 th,td{padding:.55rem .7rem;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle;white-space:nowrap}
 th{font-family:"Barlow Condensed",sans-serif;font-size:1rem;font-weight:600;color:var(--muted);background:var(--surface2);position:sticky;top:0}
 td.qty-cell .n{font-variant-numeric:tabular-nums}
+tr.round-sub td{background:color-mix(in srgb,var(--muted) 7%,transparent);font-size:.9rem}
+tr.round-head td .exp{cursor:pointer;user-select:none}
 td.qty-cell .flag{display:inline-block;margin-left:.35rem;padding:0 .35rem;border-radius:4px;font-size:.7rem;font-weight:700;letter-spacing:.03em;vertical-align:middle}
 td.qty-cell .flag.low{background:color-mix(in srgb,var(--warn) 22%,transparent);color:var(--warn)}
 td.qty-cell .flag.out{background:color-mix(in srgb,var(--bad) 18%,transparent);color:var(--bad)}
@@ -530,7 +532,7 @@ async function callNow(fn,arg){
 const S={
   items:new Map(),entries:[],stock:{},voided:new Set(),email:'',url:'#',
   settings:{club:'Quartermaster',cats:[],pays:[]},
-  images:new Map(),member:'',held:{},events:[],activeEvent:null,shifts:[],shift:null,tmp:[],bar:{guest:false,comp:false,compReason:'',cat:'',round:[],last:null},pending:0,pendDec:{},ship:{on:false,manual:false},users:[],role:'',owner:'',imgPending:new Set(),cart:new Map(),pay:null,cat:'',view:'sell',busy:false,loaded:false
+  images:new Map(),member:'',held:{},events:[],activeEvent:null,shifts:[],shift:null,tmp:[],bar:{guest:false,comp:false,compReason:'',cat:'',round:[],last:null},pending:0,pendDec:{},ship:{on:false,manual:false},users:[],role:'',owner:'',imgPending:new Set(),lgOpen:new Set(),cart:new Map(),pay:null,cat:'',view:'sell',busy:false,loaded:false
 };
 const TYPES={sale:'Sale',shipping:'Shipping',payment:'Tab payment',income:'Event income',expense:'Cost / payout',receive:'Received',adjust:'Count adj.',loss:'Loss / damage',comp:'Comp / give-away',void:'Void'};
 
@@ -2012,14 +2014,24 @@ function pastSalesModal(){
   $('#md').style.maxWidth='640px';
 }
 $('#c-pastship').onclick=pastSalesModal;
+const lgOpenInit=1;
 function saleHasShipping(sid){return S.entries.some(e=>e.sale===sid&&e.type==='shipping'&&!S.voided.has(e.id))}
 function renderLedger(){
   fillMonths($('#lg-month'));
   const m=$('#lg-month').value,t=$('#lg-type').value,q=$('#lg-q').value.trim().toLowerCase();
-  const rows=S.entries.filter(e=>inPeriod(e,m)&&(!t||e.type===t)&&(!q||[e.itemName,e.who,e.party,e.note,e.pay].join(' ').toLowerCase().includes(q)));
+  const raw=S.entries.filter(e=>inPeriod(e,m)&&(!t||e.type===t)&&(!q||[e.itemName,e.who,e.party,e.note,e.pay].join(' ').toLowerCase().includes(q)));
+  const rounds=new Map();
+  const rows=[];
+  for(const e of raw){
+    if(e.section==='bar'&&e.sale&&(e.type==='sale'||e.type==='comp')){
+      if(rounds.has(e.sale)){rounds.get(e.sale).kids.push(e);continue}
+      const g={round:e.sale,head:e,kids:[e]};rounds.set(e.sale,g);rows.push(g);continue;
+    }
+    rows.push(e);
+  }
   const firstOfSale={};
   for(const e of rows)if(e.type==='sale'&&e.sale&&!S.voided.has(e.id)&&!firstOfSale[e.sale])firstOfSale[e.sale]=e.id;
-  $('#lg-body').innerHTML=rows.length?rows.slice(0,1000).map(e=>{
+  const rowHtml=e=>{
     const v=S.voided.has(e.id),d=new Date(e.ts);
     const amt=e.type==='sale'||e.type==='payment'||e.type==='shipping'||e.type==='income'?e.total:(e.type==='receive'||e.type==='expense')?-e.total:null;
     const qty=e.type==='void'?'':`<span class="${e.qty>0?'pos':'neg'}">${e.qty>0?'+':''}${e.qty}</span>`;
@@ -2030,10 +2042,29 @@ function renderLedger(){
     <td class="wrap">${esc(e.party||'')}${v?' <span class="tag t-void">voided</span>':''}</td>
     <td class="wrap">${esc(e.who)}</td>
     <td class="act"><div class="row" style="flex-wrap:nowrap;justify-content:flex-end">${e.type==='sale'&&!v&&e.sale&&firstOfSale[e.sale]===e.id&&!isCharge(e)&&!saleHasShipping(e.sale)?'<button class="btn sm" data-ship>Ship</button>':''}${(!v&&e.type!=='void')?'<button class="btn sm" data-void>Void</button>':''}</div></td></tr>`;
-  }).join(''):'<tr><td colspan="9" class="empty">No entries for this selection.</td></tr>';
+  };
+  const groupHtml=g=>{
+    const kids=g.kids.filter(k=>!S.voided.has(k.id));
+    const n=kids.length,tot=kids.reduce((s,k)=>s+num(k.total),0);
+    const comps=kids.filter(k=>k.type==='comp').length;
+    if(n<=1)return rowHtml(g.head);
+    const e=g.head,d=new Date(e.ts),open=S.lgOpen.has(g.round);
+    const names=[...new Set(kids.map(k=>k.itemName))];
+    return `<tr class="round-head" data-round="${esc(g.round)}"><td>${d.toLocaleDateString()} <span class="muted">${d.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})}</span></td>
+      <td><span class="tag t-sale">Bar round</span>${e.event&&eventName(e.event)?`<div class="muted" style="font-size:.78rem">${esc(eventName(e.event))}</div>`:''}${e.shift?`<div class="muted" style="font-size:.78rem">${esc(shiftLabel(e.shift))}</div>`:''}</td>
+      <td class="wrap"><span class="exp"><b>${open?'▾':'▸'} ${n} drink${n===1?'':'s'}</b></span>${comps?` <span class="tag">${comps} comp</span>`:''}<div class="muted" style="font-size:.82rem">${esc(names.slice(0,3).join(', '))}${names.length>3?'…':''}</div></td>
+      <td class="num"><span class="neg">-${n}</span></td>
+      <td class="num money"><span class="pos">${money(tot)}</span>${e.onTab?' <span class="tag">on tab</span>':''}</td>
+      <td>${esc(e.pay||'')}</td><td class="wrap">${esc(e.party||'')}</td><td class="wrap">${esc(e.who)}</td>
+      <td class="act"></td></tr>`+
+      (open?kids.map(k=>{const h=rowHtml(k);return h.replace('<tr class="','<tr class="round-sub ').replace('<tr data-id','<tr class="round-sub" data-id')}).join(''):'');
+  };
+  $('#lg-body').innerHTML=rows.length?rows.slice(0,1000).map(r=>r.kids?groupHtml(r):rowHtml(r)).join(''):'<tr><td colspan="9" class="empty">No entries for this selection.</td></tr>';
 }
 ['#lg-month','#lg-type','#lg-q'].forEach(s=>$(s).addEventListener('input',renderLedger));
 $('#lg-body').addEventListener('click',e=>{
+  const rh=e.target.closest('tr.round-head');
+  if(rh&&!e.target.closest('button')){const id=rh.dataset.round;S.lgOpen.has(id)?S.lgOpen.delete(id):S.lgOpen.add(id);renderLedger();return}
   if(e.target.closest('[data-ship]')){
     const en=S.entries.find(x=>x.id===e.target.closest('tr').dataset.id);
     if(en)shipModal(en.sale);
