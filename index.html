@@ -1654,7 +1654,21 @@ window.addEventListener('online',()=>{netState();load()});window.addEventListene
   else{initGsi()}
   if(tokenValid())load().then(()=>{if(!who()&&!store('qm_asked'))nameModal()});
 })();
-if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+if('serviceWorker' in navigator){
+  const hadController=!!navigator.serviceWorker.controller;
+  let reloading=false;
+  navigator.serviceWorker.addEventListener('controllerchange',()=>{
+    if(!hadController||reloading)return;
+    if(S.cart.size||S.pending||$('#ov').classList.contains('on')){toast('App updated — reopen to use the new version',6000);return}
+    reloading=true;store('qm_updated','1');location.reload();
+  });
+  window.addEventListener('load',()=>{
+    navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).then(reg=>{
+      document.addEventListener('visibilitychange',()=>{if(!document.hidden)reg.update().catch(()=>{})});
+    }).catch(()=>{});
+  });
+  if(store('qm_updated')==='1'){store('qm_updated','');setTimeout(()=>toast('App updated'),800)}
+}
 setInterval(()=>{if(!document.hidden&&!S.busy&&!S.pending&&tokenValid()&&navigator.onLine)load()},30000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&!S.busy&&navigator.onLine)load()});
 })();
