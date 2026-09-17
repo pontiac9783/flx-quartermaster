@@ -312,6 +312,7 @@ body.role-user .admin-only{display:none!important}
     <div class="barhead">
       <div class="seg" id="bar-who"><button data-w="member" class="on">Member</button><button data-w="guest">Guest</button></div>
       <button class="btn" id="bar-comp">Comp: off</button>
+      <button class="btn" id="bar-night">📋 Tonight</button>
       <div class="grow"></div>
       <div class="bartotals"><span><span class="v money" id="bar-total">$0.00</span> <span class="muted" id="bar-count">0 drinks</span></span></div>
     </div>
@@ -1311,6 +1312,63 @@ function renderBarTotals(){
   $('#bar-last').innerHTML=last?`<span class="lastchip"><span>Last: ${esc(last.label)}</span><button data-undolast aria-label="Undo">↺</button></span>`:'';
   renderBarBar();
 }
+function shiftTotals(sh){
+  const es=sh?live().filter(e=>e.shift===sh.id):[];
+  const sales=es.filter(e=>e.type==='sale'),comps=es.filter(e=>e.type==='comp');
+  const cashName=(S.settings.pays||[]).find(p=>p.trim().toLowerCase()==='cash')||'';
+  const cash=sales.filter(e=>e.pay===cashName).reduce((s,e)=>s+num(e.total),0);
+  const tabbed=sales.filter(e=>e.onTab);
+  const tabTot=tabbed.reduce((s,e)=>s+num(e.total),0);
+  const other=sales.reduce((s,e)=>s+num(e.total),0)-cash-tabTot;
+  const byTab=new Map();
+  for(const e of tabbed){const k=e.party||'—';const o=byTab.get(k)||{n:0,amt:0};o.n++;o.amt+=num(e.total);byTab.set(k,o)}
+  const byItem=new Map();
+  for(const e of es){const k=e.itemName;const o=byItem.get(k)||{n:0,amt:0};o.n++;o.amt+=num(e.total);byItem.set(k,o)}
+  const opening=sh&&sh.openingCash!=null?num(sh.openingCash):0;
+  return {es,sales,comps,cash,tabbed,tabTot,other,byTab,byItem,opening,expected:r2(opening+cash),cashName};
+}
+function barNightModal(){
+  const sh=S.shift;
+  if(!sh){toast('No bar shift is open');return}
+  const x=shiftTotals(sh);
+  const bal=tabs();
+  const tabRows=[...x.byTab.entries()].sort((a,b)=>b[1].amt-a[1].amt);
+  const items=[...x.byItem.entries()].sort((a,b)=>b[1].n-a[1].n);
+  const recent=x.es.slice(0,40);
+  openModal(`<h3>Tonight · ${esc(sh.bartender)}</h3>
+    <p class="muted" style="margin-top:0">Open since ${new Date(sh.openedAt).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})}${sh.event?' · '+esc(eventName(sh.event)):''}</p>
+    <div class="stats">
+      <div class="card stat"><div class="v money">${money(x.cash)}</div><div class="l">Cash taken</div></div>
+      <div class="card stat"><div class="v money">${money(x.tabTot)}</div><div class="l">On tabs · ${x.tabbed.length} drink${x.tabbed.length===1?'':'s'}</div></div>
+      <div class="card stat"><div class="v money">${money(x.expected)}</div><div class="l">Expected in bar box${sh.openingCash!=null?` (incl. ${money(x.opening)} start)`:''}</div></div>
+      <div class="card stat"><div class="v">${x.sales.length}${x.comps.length?` · ${x.comps.length}`:''}</div><div class="l">Drinks${x.comps.length?' · comped':''}</div></div>
+    </div>
+    <div class="grid2">
+      <div><h3 style="font-size:1rem">Running tabs tonight</h3>
+        <div class="tw"><table><tbody>${tabRows.length?tabRows.map(([n,o])=>{const t=bal.get(catKey(n));return `<tr><td><b>${esc(n)}</b>${t&&t.balance>0.004?`<div class="muted" style="font-size:.8rem">owes ${money(t.balance)} total</div>`:''}</td><td class="num">${o.n}</td><td class="num money">${money(o.amt)}</td></tr>`}).join(''):'<tr><td class="empty">No tabs yet tonight.</td></tr>'}</tbody></table></div></div>
+      <div><h3 style="font-size:1rem">Poured tonight</h3>
+        <div class="tw" style="max-height:16rem;overflow:auto"><table><tbody>${items.length?items.map(([n,o])=>`<tr><td>${esc(n)}</td><td class="num">${o.n}</td><td class="num money">${money(o.amt)}</td></tr>`).join(''):'<tr><td class="empty">Nothing yet.</td></tr>'}</tbody></table></div></div>
+    </div>
+    <h3 style="margin-top:.8rem">Bar ledger — this shift</h3>
+    <div class="tw" style="max-height:22rem;overflow:auto"><table><tbody id="bn-list">${recent.length?recent.map(e=>`<tr data-id="${esc(e.id)}"><td>${new Date(e.ts).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})}</td>
+      <td class="wrap"><b>${esc(e.itemName)}</b>${e.type==='comp'?' <span class="tag">comp</span>':''}<div class="muted" style="font-size:.8rem">${esc([e.onTab?'tab · '+e.party:e.pay,e.note].filter(Boolean).join(' · '))}</div></td>
+      <td class="num money">${e.type==='comp'?'—':money(num(e.total))}</td>
+      <td class="act"><button class="btn sm" data-void>✕</button></td></tr>`).join(''):'<tr><td class="empty">Nothing recorded yet.</td></tr>'}</tbody></table></div>
+    <div class="row" style="margin-top:1rem;justify-content:flex-end"><button class="btn" data-close>Close bar…</button><button class="btn pri" data-x>Done</button></div>`,md=>{
+    md.querySelector('[data-x]').onclick=closeModal;
+    md.querySelector('[data-close]').onclick=()=>{closeModal();shiftModal(S.shift)};
+    md.querySelector('#bn-list').addEventListener('click',async e=>{
+      const b=e.target.closest('[data-void]');if(!b)return;
+      const id=b.closest('tr').dataset.id,en=S.entries.find(z=>z.id===id);if(!en)return;
+      if(!confirm(`Remove ${en.itemName}${en.type==='comp'?' (comp)':' '+money(num(en.total))}?`))return;
+      S.voided.add(id);recomputeStock();
+      try{await call('voidLight',{name:who(),id:id,reason:'removed at the bar'});toast('Removed');closeModal();renderBar();barNightModal()}
+      catch(err){S.voided.delete(id);recomputeStock();toast('Could not remove: '+friendly(err),5000)}
+    });
+  });
+  $('#md').style.maxWidth='860px';
+}
+$('#bar-night').onclick=barNightModal;
 function barTap(i,opts){
   opts=opts||{};
   const comp=S.bar.comp;
