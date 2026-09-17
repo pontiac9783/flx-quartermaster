@@ -1656,13 +1656,13 @@ function shiftModal(sh){
 }
 function receiveModal(preId){
   const rows=new Map();
-  if(preId)rows.set(preId,{qty:'',cost:''});
+  if(preId)rows.set(preId,{qty:'',cost:'',pack:''});
   const all=()=>[...S.items.values()].filter(i=>i.active!==false).sort(itemCmp);
   const lowFirst=()=>all().filter(i=>onHand(i.id)<=num(i.reorder));
   openModal(`<h3>Receive stock</h3>
     <input id="rc-q" type="search" data-nodirty placeholder="Search item, size, SKU — or pick below" autocomplete="off">
     <div id="rc-sug" class="chips" style="margin:.4rem 0 0"></div>
-    <div class="tw" style="margin-top:.6rem;max-height:42vh;overflow:auto"><table class="rcv"><thead><tr><th>Item</th><th class="num">On hand</th><th>Receiving</th><th class="num">Unit cost</th><th class="act"></th></tr></thead><tbody id="rc-body"></tbody></table></div>
+    <div class="tw" style="margin-top:.6rem;max-height:42vh;overflow:auto"><table class="rcv"><thead><tr><th>Item</th><th class="num">On hand</th><th>Receiving</th><th class="num">Pack size</th><th class="num">Cost</th><th class="act"></th></tr></thead><tbody id="rc-body"></tbody></table></div>
     <label>Paid by</label>
     <div class="seg" id="rc-paid"><button type="button" data-p="treasurer" class="on">Treasurer / club account</button><button type="button" data-p="cash">Cash drawer</button><button type="button" data-p="Personal">Personal (reimburse)</button></div>
     <div id="rc-paid-extra"></div>
@@ -1681,7 +1681,7 @@ function receiveModal(preId){
     };
     md.querySelector('#rc-paid').onclick=e=>{const b=e.target.closest('[data-p]');if(!b)return;paid=b.dataset.p;drawPaid();tally()};
     drawPaid();
-    const add=id=>{if(!rows.has(id))rows.set(id,{qty:'',cost:''});q.value='';draw();setTimeout(()=>{const el=body.querySelector(`tr[data-id="${id}"] .qi`);if(el){el.focus();el.select()}},20)};
+    const add=id=>{if(!rows.has(id))rows.set(id,{qty:'',cost:'',pack:''});q.value='';draw();setTimeout(()=>{const el=body.querySelector(`tr[data-id="${id}"] .qi`);if(el){el.focus();el.select()}},20)};
     let showAll=false;
     const drawSug=()=>{
       const s=q.value.trim().toLowerCase();
@@ -1698,19 +1698,34 @@ function receiveModal(preId){
       body.innerHTML=[...rows.keys()].map(id=>{
         const i=S.items.get(id);if(!i)return '';
         const r=rows.get(id),pour=isPour(i);
-        return `<tr data-id="${esc(id)}"><td class="wrap"><b>${esc(label(i))}</b>${pour?`<div class="muted" style="font-size:.8rem">bottles of ${i.pours} pours</div>`:''}</td>
+        const pk=pour?0:Math.max(1,Math.round(num(r.pack))||1);
+        const units=pour?Math.round(num(r.qty))*i.pours:Math.round(num(r.qty))*pk;
+        const per=pour?(num(r.cost)?r2(num(r.cost)/i.pours):num(i.cost)):(num(r.cost)?r2(num(r.cost)/pk):num(i.cost));
+        return `<tr data-id="${esc(id)}"><td class="wrap"><b>${esc(label(i))}</b><div class="muted rc-hint" style="font-size:.8rem">${pour?`bottles of ${i.pours} pours`:(units&&pk>1?`${units} units`:'')}${per&&(pk>1||pour)?` · ${money(per)} each`:''}</div></td>
           <td class="num">${pour?`${Math.floor(Math.max(0,onHand(id))/i.pours)} btl`:onHand(id)}</td>
-          <td><div class="step"><button type="button" data-d="-1">−</button><input class="qi" type="number" min="0" step="1" inputmode="numeric" value="${r.qty}" placeholder="${pour?'btl':'qty'}"><button type="button" data-d="1">+</button></div></td>
-          <td class="num"><input class="ci" type="number" min="0" step="0.01" inputmode="decimal" value="${r.cost}" placeholder="${pour?r2(num(i.cost)*i.pours):num(i.cost)}"></td>
+          <td><div class="step"><button type="button" data-d="-1">−</button><input class="qi" type="number" min="0" step="1" inputmode="numeric" value="${r.qty}" placeholder="${pour?'btl':pk>1?'packs':'qty'}"><button type="button" data-d="1">+</button></div></td>
+          <td class="num">${pour?'<span class="muted">bottle</span>':`<input class="pi" type="number" min="1" step="1" inputmode="numeric" value="${r.pack}" placeholder="1" style="width:4.5rem">`}</td>
+          <td class="num"><input class="ci" type="number" min="0" step="0.01" inputmode="decimal" value="${r.cost}" placeholder="${pour?r2(num(i.cost)*i.pours):(pk>1?r2(num(i.cost)*pk):num(i.cost))}" title="${pour?'cost per bottle':(pk>1?'cost per pack':'cost each')}"></td>
           <td class="act"><button class="btn sm" data-rm>✕</button></td></tr>`;
       }).join('')||'<tr><td colspan="5" class="empty">Search or tap a low-stock item to start.</td></tr>';
       drawSug();tally();
     };
+    const rowHint=tr=>{
+      const i=S.items.get(tr.dataset.id),r=rows.get(tr.dataset.id),h=tr.querySelector('.rc-hint');
+      if(!i||!r||!h)return;
+      const pour=isPour(i),pk=pour?1:Math.max(1,Math.round(num(r.pack))||1);
+      const qty=Math.round(num(r.qty));
+      const units=pour?qty*i.pours:qty*pk;
+      const per=num(r.cost)?r2(num(r.cost)/(pour?i.pours:pk)):num(i.cost);
+      h.textContent=pour?`bottles of ${i.pours} pours${per?` · ${money(per)} per pour`:''}`
+        :`${units&&pk>1?`${units} units`:''}${per&&pk>1?` · ${money(per)} each`:''}`;
+    };
     const tally=()=>{
       let n=0,cost=0;
       rows.forEach((r,id)=>{const i=S.items.get(id);if(!i)return;const qty=Math.round(num(r.qty));if(qty<=0)return;
-        const per=isPour(i)?(num(r.cost)||r2(num(i.cost)*i.pours)):(num(r.cost)||num(i.cost));
-        n+=qty;cost+=qty*per});
+        const pour=isPour(i),pk=pour?1:Math.max(1,Math.round(num(r.pack))||1);
+        const packCost=num(r.cost)||(pour?r2(num(i.cost)*i.pours):r2(num(i.cost)*pk));
+        n+=pour?qty*i.pours:qty*pk;cost+=qty*packCost});
       sum.textContent=n?`${n} ${n===1?'unit':'units'} · ${money(r2(cost))}${paid==='cash'?` out of the ${till==='bar'?'bar box':'merch drawer'}`:paid==='Personal'?' to reimburse':''}`:'';
     };
     q.addEventListener('input',drawSug);
@@ -1731,7 +1746,8 @@ function receiveModal(preId){
       const r=rows.get(tr.dataset.id);
       if(e.target.classList.contains('qi'))r.qty=e.target.value;
       if(e.target.classList.contains('ci'))r.cost=e.target.value;
-      tally();
+      if(e.target.classList.contains('pi'))r.pack=e.target.value;
+      rowHint(tr);tally();
     });
     md.querySelector('[data-x]').onclick=closeModal;
     md.querySelector('[data-ok]').onclick=async()=>{
@@ -1739,9 +1755,10 @@ function receiveModal(preId){
       rows.forEach((r,id)=>{
         const i=S.items.get(id);if(!i)return;
         const qty=Math.round(num(r.qty));if(qty<=0)return;
-        const pour=isPour(i);
+        const pour=isPour(i),pk=pour?1:Math.max(1,Math.round(num(r.pack))||1);
         const enteredCost=r.cost===''?'':r2(num(r.cost));
-        lines.push({id:id,qty:pour?qty*i.pours:qty,cost:enteredCost===''?'':(pour?r2(enteredCost/i.pours):enteredCost)});
+        const per=enteredCost===''?'':(pour?r2(enteredCost/i.pours):r2(enteredCost/pk));
+        lines.push({id:id,qty:pour?qty*i.pours:qty*pk,cost:per});
       });
       if(!lines.length){toast('Enter how many you received');return}
       const btn=md.querySelector('[data-ok]');btn.disabled=true;btn.textContent='Saving…';
@@ -1856,7 +1873,7 @@ function itemModal(it){
     <label for="f-desc">Description</label><textarea id="f-desc" rows="3" maxlength="500" placeholder="Material, colors, fit, notes…">${esc(it.description||'')}</textarea>
     <label>Where it's sold</label><div class="seg" id="f-section"><button type="button" data-s="merch" class="${it.section==='bar'?'':'on'}">Merch</button><button type="button" data-s="bar" class="${it.section==='bar'?'on':''}">Bar</button></div>
     <div class="row"><div class="grow"><label for="f-cat">Category</label><select id="f-cat">${catOpts}</select></div>
-    <div class="grow"><label for="f-size">Size / variant</label><input id="f-size" value="${esc(it.size||'')}" placeholder="e.g. XL, Chrome, 2026"></div></div>
+    <div class="grow" id="f-size-wrap"><label for="f-size">Size / variant</label><input id="f-size" value="${esc(it.size||'')}" placeholder="e.g. XL, Chrome, 2026"></div></div>
     <div id="f-barbox"></div>
     <div class="row"><div class="grow"><label for="f-price" id="f-price-lbl">Sell price ($)</label><input id="f-price" type="number" step="0.01" min="0" value="${it.price!=null?it.price:''}"></div>
     <div class="grow"><label for="f-cost" id="f-cost-lbl">Unit cost ($)</label><input id="f-cost" type="number" step="0.01" min="0" value="${num(it.pours)>0&&it.cost?r2(num(it.cost)*num(it.pours)):(it.cost!=null?it.cost:'')}"><div id="f-cost-hint" class="muted" style="font-size:.82rem"></div></div></div>
@@ -1867,7 +1884,7 @@ function itemModal(it){
     <div class="grow"><label for="f-sku">SKU / part #</label><input id="f-sku" value="${esc(it.sku||'')}" placeholder="Auto-generated if blank"></div></div>
     ${!isNew&&siblings>1?`<label class="row" style="color:var(--ink)"><input type="checkbox" id="f-share" style="width:auto;min-height:0" checked> Use this picture &amp; description for all ${siblings} sizes of “${esc(it.name)}”</label>`:''}
     ${isNew?`<label for="f-open">Starting quantity on hand</label><input id="f-open" type="number" step="1" min="0" value="0">
-    <label class="row" style="color:var(--ink)"><input type="checkbox" id="f-sizes" style="width:auto;min-height:0"> Also create sizes (S, M, L, XL, 2XL, 3XL) — starting qty 0 each</label>`:
+    <label class="row" id="f-sizes-wrap" style="color:var(--ink)"><input type="checkbox" id="f-sizes" style="width:auto;min-height:0"> Also create sizes (S, M, L, XL, 2XL, 3XL) — starting qty 0 each</label>`:
     `<label class="row" style="color:var(--ink)"><input type="checkbox" id="f-active" style="width:auto;min-height:0" ${it.active!==false?'checked':''}> Active (shown on the Sell screen)</label>`}
     <div class="row" style="margin-top:1rem;justify-content:space-between">
       <div>${!isNew?`<button class="btn" data-del style="color:var(--bad)">Delete</button>`:''}</div>
@@ -1880,6 +1897,10 @@ function itemModal(it){
     function drawBar(){
       md.querySelectorAll('#f-section button').forEach(b=>b.classList.toggle('on',b.dataset.s===section));
       g('f-price-lbl').textContent=section==='bar'?'Member donation ($)':'Sell price ($)';
+      const sw=g('f-size-wrap'),szw=g('f-sizes-wrap');
+      if(sw)sw.style.display=section==='bar'?'none':'';
+      if(szw)szw.style.display=section==='bar'?'none':'';
+      if(section==='bar'&&g('f-sizes'))g('f-sizes').checked=false;
       const csel=g('f-cat'),keep=csel.value;
       csel.innerHTML=catOptsFor(section);
       if([...csel.options].some(o=>o.value===keep))csel.value=keep;
@@ -1916,7 +1937,7 @@ function itemModal(it){
       pours:(btype==='bottle'&&g('f-pours'))?Math.round(num(g('f-pours').value)):'',
       poursFrom:(btype==='mixed'&&g('f-from'))?g('f-from').value:'',
       poursPer:(btype==='mixed'&&g('f-per'))?Math.round(num(g('f-per').value)):'',
-      name:g('f-name').value.trim(),cat:g('f-cat').value,size:g('f-size').value.trim(),price:r2(num(g('f-price').value)),cost:(()=>{const n=poursNow(),c=r2(num(g('f-cost').value));return n>0?r2(c/n):c})(),reorder:Math.max(0,Math.round(num(g('f-reorder').value))),sku:g('f-sku').value.trim(),salePrice:g('f-sale').value===''?'':r2(num(g('f-sale').value)),shipPrice:g('f-ship').value===''?'':r2(num(g('f-ship').value)),onSale:g('f-onsale').checked,description:g('f-desc').value.trim()});
+      name:g('f-name').value.trim(),cat:g('f-cat').value,size:section==='bar'?'':g('f-size').value.trim(),price:r2(num(g('f-price').value)),cost:(()=>{const n=poursNow(),c=r2(num(g('f-cost').value));return n>0?r2(c/n):c})(),reorder:Math.max(0,Math.round(num(g('f-reorder').value))),sku:g('f-sku').value.trim(),salePrice:g('f-sale').value===''?'':r2(num(g('f-sale').value)),shipPrice:g('f-ship').value===''?'':r2(num(g('f-ship').value)),onSale:g('f-onsale').checked,description:g('f-desc').value.trim()});
     g('f-file').onchange=async e=>{
       const f=e.target.files&&e.target.files[0];if(!f)return;
       g('f-pic-msg').textContent='Processing…';
