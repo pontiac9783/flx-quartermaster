@@ -138,6 +138,18 @@ img.thumb.zoomable,#f-pic img{cursor:zoom-in}
 .spark{width:100%;height:58px;display:block;margin-top:.3rem}
 .spark rect{fill:var(--accent);opacity:.8}
 .spark text{fill:var(--muted);font-size:9px}
+#evbar{display:none;align-items:center;gap:.6rem;justify-content:space-between;flex-wrap:wrap;padding:.45rem 1rem;font-size:.92rem;border-bottom:1px solid var(--line)}
+#evbar.on{display:flex}
+#evbar.live{background:color-mix(in srgb,var(--ok) 16%,var(--surface));}
+#evbar.idle{background:var(--surface);color:var(--muted)}
+#evbar .dot{display:inline-block;width:.6rem;height:.6rem;border-radius:50%;background:var(--ok);margin-right:.4rem;animation:pulse 1.6s infinite}
+@keyframes pulse{50%{opacity:.35}}
+.evbadge{display:inline-block;background:var(--brass);color:#fff;font-size:.72rem;font-weight:700;letter-spacing:.04em;padding:.05rem .4rem;border-radius:4px;vertical-align:middle}
+.tile .evbadge{position:absolute;top:.9rem;left:.9rem;z-index:1}
+.tile.onevent{border-color:var(--brass)}
+.pricelist td input{width:6.5rem;min-height:36px;padding:.2rem .4rem}
+.cashbox{display:grid;grid-template-columns:1fr auto;gap:.2rem .8rem;margin:.4rem 0}
+.cashbox .tot{font-weight:700;border-top:1px solid var(--line);padding-top:.2rem}
 th.act,td.act{position:sticky;right:0;z-index:1;background:var(--surface);box-shadow:-8px 0 8px -8px rgba(0,0,0,.25);text-align:right}
 th.act{background:var(--surface2);z-index:2}
 tr.low td.act{background:color-mix(in srgb,var(--warn) 12%,var(--surface))}
@@ -219,6 +231,7 @@ body.role-user .admin-only{display:none!important}
   <button class="btn" id="si-install" style="display:none;margin:0 auto .6rem">Install app</button>
   <p id="si-msg" class="muted"></p>
 </div></div>
+<div id="evbar"></div>
 <nav id="nav">
   <button data-v="sell" class="on">Sell</button>
   <button data-v="tabs">Tabs</button>
@@ -311,11 +324,13 @@ body.role-user .admin-only{display:none!important}
       <h2 style="margin:0">Reports</h2>
       <div class="row"><select id="rp-month" style="width:auto"></select><a class="btn admin-only" id="rp-open" target="_blank" rel="noopener" style="text-decoration:none;display:inline-flex;align-items:center">Open spreadsheet</a></div>
     </div>
+    <div id="rp-event"></div>
     <div class="stats" id="rp-stats" style="margin-top:1rem"></div>
     <div class="grid2">
       <div class="card"><h3>Takings by payment method</h3><div class="tw"><table><thead><tr><th>Method</th><th class="num">Sales</th><th class="num">Amount</th><th class="num">Shipping</th><th class="num">Tab payments in</th></tr></thead><tbody id="rp-pay"></tbody></table></div></div>
       <div class="card"><h3>Top sellers</h3><div class="tw"><table><thead><tr><th>Item</th><th class="num">Units</th><th class="num">Revenue</th><th class="num">Profit</th></tr></thead><tbody id="rp-top"></tbody></table></div></div>
       <div class="card"><h3>Needs reordering</h3><div class="tw"><table><thead><tr><th>Item</th><th class="num">On hand</th><th class="num">Reorder at</th></tr></thead><tbody id="rp-low"></tbody></table></div></div>
+      <div class="card"><h3>Events</h3><div class="tw"><table><thead><tr><th>Event</th><th class="num">Sales</th><th class="num">Revenue</th><th class="num">Profit</th><th class="num">Cash +/-</th></tr></thead><tbody id="rp-events"></tbody></table></div></div>
       <div class="card"><h3>Sales by price type</h3><div class="tw"><table><thead><tr><th>Price</th><th class="num">Units</th><th class="num">Revenue</th><th class="num">Discount given</th></tr></thead><tbody id="rp-ptype"></tbody></table></div></div>
       <div class="card"><h3>Shrinkage &amp; comps</h3><div class="tw"><table><thead><tr><th>Type</th><th class="num">Units</th><th class="num">Cost value</th></tr></thead><tbody id="rp-shrink"></tbody></table></div></div>
     </div>
@@ -451,7 +466,7 @@ async function callNow(fn,arg){
 const S={
   items:new Map(),entries:[],stock:{},voided:new Set(),email:'',url:'#',
   settings:{club:'Quartermaster',cats:[],pays:[]},
-  images:new Map(),held:{},pending:0,pendDec:{},ship:{on:false,manual:false},users:[],role:'',owner:'',imgPending:new Set(),cart:new Map(),pay:null,cat:'',view:'sell',busy:false,loaded:false
+  images:new Map(),held:{},events:[],activeEvent:null,pending:0,pendDec:{},ship:{on:false,manual:false},users:[],role:'',owner:'',imgPending:new Set(),cart:new Map(),pay:null,cat:'',view:'sell',busy:false,loaded:false
 };
 const TYPES={sale:'Sale',shipping:'Shipping',payment:'Tab payment',receive:'Received',adjust:'Count adj.',loss:'Loss / damage',comp:'Comp / give-away',void:'Void'};
 
@@ -486,8 +501,9 @@ function tabs(){
 }
 function memberNames(){const m=new Map();for(const e of S.entries){const n=String(e.party||'').trim();if(n&&!m.has(n.toLowerCase()))m.set(n.toLowerCase(),n)}return [...m.values()].sort((a,b)=>a.localeCompare(b))}
 const isOnSale=i=>!!(i&&i.onSale&&num(i.salePrice)>0);
-const effPrice=i=>isOnSale(i)?num(i.salePrice):num(i.price);
-function priceHtml(i){return isOnSale(i)?`<span class="salebadge">SALE</span> <span class="was-inline">${money(num(i.price))}</span>${money(num(i.salePrice))}`:money(num(i.price))}
+const evPrice=i=>(i&&S.activeEvent&&num(S.activeEvent.prices[i.id])>0)?num(S.activeEvent.prices[i.id]):0;
+const effPrice=i=>evPrice(i)||(isOnSale(i)?num(i.salePrice):num(i.price));
+function priceHtml(i){if(evPrice(i))return `<span class="evbadge">EVENT</span> <span class="was-inline">${money(num(i.price))}</span>${money(evPrice(i))}`;return isOnSale(i)?`<span class="salebadge">SALE</span> <span class="was-inline">${money(num(i.price))}</span>${money(num(i.salePrice))}`:money(num(i.price))}
 function label(it){return it?(it.name+(it.size?' — '+it.size:'')):'(deleted item)'}
 function who(){return store('qm_who')||''}
 function applyTheme(){const t=store('qm_theme')||'';if(t)document.documentElement.setAttribute('data-theme',t);else document.documentElement.removeAttribute('data-theme')}
@@ -509,7 +525,7 @@ function apply(d){
   const st={};
   for(const e of S.entries){if(e.type==='void'||e.voided)continue;st[e.itemId]=(st[e.itemId]||0)+num(e.qty)}
   for(const id in S.pendDec)st[id]=(st[id]||0)-S.pendDec[id];
-  S.stock=st;S.settings=d.settings;S.loaded=true;S.email=d.email||'';S.url=d.url||'#';S.held=d.held||{};S.role=d.role||'user';S.users=d.users||[];S.owner=d.owner||'';applyRole();
+  S.stock=st;S.settings=d.settings;S.loaded=true;S.email=d.email||'';S.url=d.url||'#';S.held=d.held||{};S.events=d.events||[];S.activeEvent=S.events.find(e=>!e.endedAt)||null;S.role=d.role||'user';S.users=d.users||[];S.owner=d.owner||'';applyRole();
   $('#lg-open').href=S.url;$('#rp-open').href=S.url;
   banner('');showWho();refresh();ensureImages();
 }
@@ -740,8 +756,8 @@ function renderSell(){
   $('#s-tiles').innerHTML=list.length?list.map(i=>{
     const oh=onHand(i.id),hl=heldElsewhere(i.id),av=oh-hl;
     const cls=av<=0?'out':(av<=num(i.reorder)?'low':'');
-    const sale=isOnSale(i),blocked=hl>0&&av<=0&&!S.cart.has(i.id);
-    return `<button class="tile ${S.cart.has(i.id)?'incart':''} ${sale?'onsale':''} ${blocked?'held':''}" data-id="${esc(i.id)}" title="${esc(i.description||'')}">${sale?'<span class="salebadge">SALE</span>':''}<span class="qty ${cls}">${blocked?'In another cart':`${Math.max(av,oh>0?0:oh)} left`}</span><span class="thumbwrap">${thumb(i)}${hasImg(i)?`<span class="zoom" data-zoom="${esc(i.id)}" role="button" aria-label="View picture" title="View picture">⤢</span>`:''}</span><b>${esc(i.name)}</b><span class="sz">${esc(i.size||i.cat||'')}${hl>0?` <span class="muted">· ${hl} in other cart${hl===1?'':'s'}</span>`:''}</span><span class="pr money">${money(effPrice(i))}${sale?`<span class="was">${money(num(i.price))}</span>`:''}</span></button>`;
+    const evp=evPrice(i),sale=!evp&&isOnSale(i),blocked=hl>0&&av<=0&&!S.cart.has(i.id);
+    return `<button class="tile ${S.cart.has(i.id)?'incart':''} ${sale?'onsale':''} ${evp?'onevent':''} ${blocked?'held':''}" data-id="${esc(i.id)}" title="${esc(i.description||'')}">${evp?'<span class="evbadge">EVENT</span>':sale?'<span class="salebadge">SALE</span>':''}<span class="qty ${cls}">${blocked?'In another cart':`${Math.max(av,oh>0?0:oh)} left`}</span><span class="thumbwrap">${thumb(i)}${hasImg(i)?`<span class="zoom" data-zoom="${esc(i.id)}" role="button" aria-label="View picture" title="View picture">⤢</span>`:''}</span><b>${esc(i.name)}</b><span class="sz">${esc(i.size||i.cat||'')}${hl>0?` <span class="muted">· ${hl} in other cart${hl===1?'':'s'}</span>`:''}</span><span class="pr money">${money(effPrice(i))}${(sale||evp)&&effPrice(i)!==num(i.price)?`<span class="was">${money(num(i.price))}</span>`:''}</span></button>`;
   }).join('')+(hidden?`<div class="empty" style="grid-column:1/-1;padding:.8rem">${hidden} out-of-stock item${hidden===1?'':'s'} hidden</div>`:'')
   :`<div class="empty">${!S.items.size?'No items yet — add some on the Stock tab.':hidden?`Nothing in stock here. ${hidden} out-of-stock item${hidden===1?' is':'s are'} hidden — tick “Show out of stock”.`:'No items match.'}</div>`;
   renderCart();
@@ -754,7 +770,7 @@ function renderCart(){
   const lines=[...S.cart.values()].map(l=>{
     const it=S.items.get(l.id);total+=l.qty*l.price;units+=l.qty;
     const over=l.qty>avail(l.id);
-    const pt=l.price!==effPrice(it)?'<span class="tag">price changed</span>':isOnSale(it)?'<span class="salebadge">SALE</span>':'';
+    const pt=l.price!==effPrice(it)?'<span class="tag">price changed</span>':evPrice(it)?'<span class="evbadge">EVENT</span>':isOnSale(it)?'<span class="salebadge">SALE</span>':'';
     return `<div class="cline" data-id="${esc(l.id)}"><div><b>${esc(label(it))}</b> ${pt}${it&&it.description?`<div class="desc">${esc(it.description)}</div>`:''}${over?`<div class="neg" style="font-size:.85rem">Only ${Math.max(0,avail(l.id))} available${heldElsewhere(l.id)?` · ${heldElsewhere(l.id)} in another cart`:''}</div>`:''}
       <div class="row" style="margin-top:.3rem"><span class="muted">each $</span><input type="number" step="0.01" min="0" value="${l.price}" data-price></div></div>
       <div style="text-align:right"><div class="stepper"><button data-d="-1">−</button><span>${l.qty}</span><button data-d="1">+</button></div><div class="money" style="margin-top:.3rem">${money(l.qty*l.price)}</div></div></div>`;
@@ -967,6 +983,91 @@ window.addEventListener('pagehide',()=>{
   if(!S.cart.size||!tokenValid()||!navigator.sendBeacon||!CFG.API_URL)return;
   try{navigator.sendBeacon(CFG.API_URL,new Blob([JSON.stringify({fn:'syncCart',arg:{lines:[]},idToken:AUTH.token,session:SESSION})],{type:'text/plain;charset=utf-8'}))}catch(e){}
 });
+function renderEvBar(){
+  const bar=$('#evbar'),ev=S.activeEvent;
+  if(!S.loaded){bar.className='';return}
+  if(ev){
+    bar.className='on live';
+    bar.innerHTML=`<span><span class="dot"></span><b>${esc(ev.name)}</b> <span class="muted">· since ${new Date(ev.startedAt).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'})}${Object.keys(ev.prices||{}).length?' · event prices on':''}</span></span>${isAdmin()?'<button class="btn sm" id="ev-manage">Manage event</button>':''}`;
+    const b=$('#ev-manage');if(b)b.onclick=()=>eventModal(ev);
+  }else if(isAdmin()){
+    bar.className='on idle';
+    bar.innerHTML='<span>No event running</span><button class="btn sm" id="ev-start">Start event</button>';
+    $('#ev-start').onclick=()=>eventModal(null);
+  }else bar.className='';
+}
+function priceListHtml(prices){
+  const groups=new Map();
+  for(const i of activeItems()){const k=catKey(i.name);if(!groups.has(k))groups.set(k,[]);groups.get(k).push(i)}
+  const rows=[...groups.values()].sort((a,b)=>a[0].name.localeCompare(b[0].name)).map(g=>{
+    const reg=[...new Set(g.map(i=>num(i.price)))],cur=[...new Set(g.map(i=>num(prices[i.id])||0))];
+    const val=cur.length===1&&cur[0]>0?cur[0].toFixed(2):'';
+    const sale=g.some(isOnSale)?` <span class="salebadge">SALE ${money(num(g.find(isOnSale).salePrice))}</span>`:'';
+    return `<tr data-ids="${esc(g.map(i=>i.id).join(','))}"><td class="wrap"><b>${esc(g[0].name)}</b>${g.length>1?` <span class="muted">(${g.length} sizes)</span>`:''}${sale}</td><td class="num money">${reg.length===1?money(reg[0]):money(Math.min(...reg))+'–'+money(Math.max(...reg))}</td><td><input type="number" step="0.01" min="0" inputmode="decimal" value="${val}" placeholder="—"></td></tr>`;
+  }).join('');
+  return `<div class="tw pricelist" style="max-height:40vh;overflow:auto"><table><thead><tr><th>Item</th><th class="num">Regular</th><th>Event $</th></tr></thead><tbody>${rows||'<tr><td class="empty">No active items.</td></tr>'}</tbody></table></div>
+  <p class="muted" style="font-size:.85rem">Leave blank to use the normal (or sale) price. A price applies to every size of that item.</p>`;
+}
+function readPriceList(md){
+  const out={};
+  md.querySelectorAll('.pricelist tr[data-ids]').forEach(tr=>{const v=tr.querySelector('input').value;if(v!==''&&num(v)>0)tr.dataset.ids.split(',').forEach(id=>out[id]=r2(num(v)))});
+  return out;
+}
+function eventModal(ev){
+  if(!isAdmin())return;
+  const isNew=!ev,isLive=!!(ev&&!ev.endedAt);
+  const x=ev?eventSummary(ev):null;
+  openModal(`<h3>${isNew?'Start event':isLive?'Manage event':'Edit event'}</h3>
+    <label for="ev-name">Event name</label><input id="ev-name" value="${esc(ev?ev.name:'')}" placeholder="e.g. Poker Run 2026">
+    <label for="ev-open">Opening cash in box ($)</label><input id="ev-open" type="number" step="0.01" min="0" inputmode="decimal" value="${ev&&ev.openingCash!=null?num(ev.openingCash).toFixed(2):''}" placeholder="Optional — starting float">
+    ${isNew||isLive?`<label class="row" style="color:var(--ink);margin-top:.8rem"><input type="checkbox" id="ev-useprices" style="width:auto;min-height:0" ${ev&&Object.keys(ev.prices||{}).length?'checked':''}> Use event prices</label>
+    <div id="ev-prices" style="display:${ev&&Object.keys(ev.prices||{}).length?'':'none'}">${priceListHtml(ev?ev.prices:{})}</div>`:''}
+    ${isLive?`<h3 style="margin-top:1.2rem">End event</h3>${cashboxHtml(ev,x)}
+      <label for="ev-close">Counted cash in box ($)</label><input id="ev-close" type="number" step="0.01" min="0" inputmode="decimal" placeholder="Count the box, then enter it">
+      <div id="ev-diff" class="muted" style="margin-top:.2rem"></div>
+      <label for="ev-notes">Notes</label><input id="ev-notes" placeholder="Optional">`:''}
+    ${ev&&!isLive?`<label for="ev-close">Counted cash ($)</label><input id="ev-close" type="number" step="0.01" min="0" inputmode="decimal" value="${ev.closingCash!=null?num(ev.closingCash).toFixed(2):''}">
+      <label for="ev-notes">Notes</label><input id="ev-notes" value="${esc(ev.notes||'')}">`:''}
+    <div class="row" style="margin-top:1rem;justify-content:flex-end">
+      <button class="btn" data-x>Cancel</button>
+      ${isLive?'<button class="btn" data-save>Save changes</button><button class="btn pri" data-end>End event</button>':`<button class="btn pri" data-save>${isNew?'Start event':'Save'}</button>`}
+    </div>`,md=>{
+    const g=id=>md.querySelector('#'+id);
+    md.querySelector('[data-x]').onclick=closeModal;
+    const up=g('ev-useprices');if(up)up.onchange=()=>{g('ev-prices').style.display=up.checked?'':'none'};
+    const prices=()=>up&&up.checked?readPriceList(md):{};
+    const openVal=()=>g('ev-open').value===''?'':r2(num(g('ev-open').value));
+    if(isLive){
+      const upd=()=>{const v=g('ev-close').value;if(v===''){g('ev-diff').textContent='';return}
+        const opening=g('ev-open').value===''?0:num(g('ev-open').value);
+        const exp=r2(opening+x.cs+x.cship+x.cpay),d=r2(num(v)-exp);
+        g('ev-diff').innerHTML=d===0?'<span class="pos">Balanced ✓</span>':`<span class="${d<0?'neg':'pos'}">${d<0?'Short':'Over'} ${money(Math.abs(d))}</span> <span class="muted">(expected ${money(exp)})</span>`};
+      g('ev-close').addEventListener('input',upd);g('ev-open').addEventListener('input',upd);
+    }
+    md.querySelector('[data-save]').onclick=async()=>{
+      const evName=g('ev-name').value.trim();if(!evName){g('ev-name').focus();return}
+      if(isNew){if(await write('startEvent',{evName,openingCash:openVal(),prices:prices()},`Event started · ${evName}`))closeModal();return}
+      const arg={id:ev.id,evName,openingCash:openVal()};
+      if(isLive)arg.prices=prices();
+      else{arg.closingCash=g('ev-close').value===''?'':r2(num(g('ev-close').value));arg.notes=g('ev-notes').value.trim()}
+      if(await write('updateEvent',arg,'Event updated'))closeModal();
+    };
+    const end=md.querySelector('[data-end]');
+    if(end)end.onclick=async()=>{
+      const evName=g('ev-name').value.trim()||ev.name;
+      const cv=g('ev-close').value;
+      if(cv===''&&!confirm('End the event without a cash count?'))return;
+      if(!confirm(`End “${evName}”? Sales after this won’t be tagged${Object.keys(ev.prices||{}).length?' and event prices stop':''}.`))return;
+      const changed=evName!==ev.name||openVal()!==(ev.openingCash==null?'':r2(num(ev.openingCash)));
+      if(changed&&!(await write('updateEvent',{id:ev.id,evName,openingCash:openVal(),prices:prices()},null)))return;
+      if(await write('endEvent',{id:ev.id,closingCash:cv===''?'':r2(num(cv)),notes:g('ev-notes').value.trim()},`Event ended · ${evName}`)){
+        closeModal();
+        wantPeriod='ev:'+ev.id;document.querySelector('#nav button[data-v="reports"]').click();
+      }
+    };
+  });
+  $('#md').style.maxWidth='640px';
+}
 function renderStock(){
   const sel=$('#st-cat'),cur=sel.value;
   const orph=orphanCats();
@@ -1191,11 +1292,21 @@ function months(){
   const set=new Set(S.entries.map(e=>monthKey(new Date(e.ts))));set.add(monthKey(new Date()));
   return [...set].sort().reverse();
 }
+let wantPeriod='';
 function fillMonths(sel){
-  const cur=sel.value,ms=months();
-  sel.innerHTML='<option value="all">All time</option>'+ms.map(m=>`<option value="${m}">${monthLabel(m)}</option>`).join('');
+  const cur=(sel.id==='rp-month'&&wantPeriod)||sel.value,ms=months();
+  if(sel.id==='rp-month')wantPeriod='';
+  sel.innerHTML='<option value="all">All time</option>'+
+    `<optgroup label="Months">${ms.map(m=>`<option value="${m}">${monthLabel(m)}</option>`).join('')}</optgroup>`+
+    (S.events.length?`<optgroup label="Events">${S.events.map(e=>`<option value="ev:${esc(e.id)}">${e.endedAt?'':'● '}${esc(e.name)} · ${new Date(e.startedAt).toLocaleDateString([], {month:'short',day:'numeric'})}</option>`).join('')}</optgroup>`:'');
   sel.value=(cur&&[...sel.options].some(o=>o.value===cur))?cur:ms[0];
 }
+function inPeriod(e,m){
+  if(m==='all')return true;
+  if(m.indexOf('ev:')===0)return e.event===m.slice(3);
+  return monthKey(new Date(e.ts))===m;
+}
+const eventName=id=>{const e=S.events.find(x=>x.id===id);return e?e.name:''};
 function shipModal(saleId){
   const lines=S.entries.filter(e=>e.sale===saleId&&e.type==='sale'&&!S.voided.has(e.id));
   if(!lines.length){toast('Sale not found');return}
@@ -1256,7 +1367,7 @@ function saleHasShipping(sid){return S.entries.some(e=>e.sale===sid&&e.type==='s
 function renderLedger(){
   fillMonths($('#lg-month'));
   const m=$('#lg-month').value,t=$('#lg-type').value,q=$('#lg-q').value.trim().toLowerCase();
-  const rows=S.entries.filter(e=>(m==='all'||monthKey(new Date(e.ts))===m)&&(!t||e.type===t)&&(!q||[e.itemName,e.who,e.party,e.note,e.pay].join(' ').toLowerCase().includes(q)));
+  const rows=S.entries.filter(e=>inPeriod(e,m)&&(!t||e.type===t)&&(!q||[e.itemName,e.who,e.party,e.note,e.pay].join(' ').toLowerCase().includes(q)));
   const firstOfSale={};
   for(const e of rows)if(e.type==='sale'&&e.sale&&!S.voided.has(e.id)&&!firstOfSale[e.sale])firstOfSale[e.sale]=e.id;
   $('#lg-body').innerHTML=rows.length?rows.slice(0,1000).map(e=>{
@@ -1266,7 +1377,7 @@ function renderLedger(){
     return `<tr class="${v?'voided':''}" data-id="${esc(e.id)}"><td>${d.toLocaleDateString()} <span class="muted">${d.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})}</span></td>
     <td><span class="tag t-${esc(e.type)}">${TYPES[e.type]||esc(e.type)}</span></td><td>${esc(e.itemName)}</td><td class="num">${qty}</td>
     <td class="num money">${amt==null?'':`<span class="${amt>=0?'pos':'neg'}">${money(amt)}</span>`}${e.type==='sale'&&e.priceType==='sale'?' <span class="salebadge">SALE</span>':''}${e.type==='sale'&&e.priceType==='override'?' <span class="tag">override</span>':''}${isCharge(e)?' <span class="tag">on tab</span>':''}</td><td>${esc(e.pay)}</td><td>${esc(e.who)}</td>
-    <td class="wrap">${esc([e.party,e.note].filter(Boolean).join(' · '))}${v?' <span class="tag t-void">voided</span>':''}</td>
+    <td class="wrap">${e.event&&eventName(e.event)?`<span class="evbadge" style="font-weight:600">${esc(eventName(e.event))}</span> `:''}${esc([e.party,e.note].filter(Boolean).join(' · '))}${v?' <span class="tag t-void">voided</span>':''}</td>
     <td class="act"><div class="row" style="flex-wrap:nowrap;justify-content:flex-end">${e.type==='sale'&&!v&&e.sale&&firstOfSale[e.sale]===e.id&&!isCharge(e)&&!saleHasShipping(e.sale)?'<button class="btn sm" data-ship>Ship</button>':''}${(!v&&e.type!=='void')?'<button class="btn sm" data-void>Void</button>':''}</div></td></tr>`;
   }).join(''):'<tr><td colspan="9" class="empty">No entries for this selection.</td></tr>';
 }
@@ -1292,10 +1403,49 @@ $('#lg-body').addEventListener('click',e=>{
 });
 
 
+function eventSummary(ev){
+  const es=live().filter(e=>e.event===ev.id);
+  const sales=es.filter(e=>e.type==='sale');
+  const rev=sales.reduce((s,e)=>s+num(e.total),0),cogs=sales.reduce((s,e)=>s-num(e.qty)*num(e.cost),0);
+  const cashName=(S.settings.pays||[]).find(p=>p.trim().toLowerCase()==='cash')||'';
+  const isCash=e=>cashName&&e.pay===cashName;
+  const cs=sales.filter(isCash).reduce((s,e)=>s+num(e.total),0);
+  const cship=es.filter(e=>e.type==='shipping'&&isCash(e)).reduce((s,e)=>s+num(e.total),0);
+  const cpay=es.filter(e=>e.type==='payment'&&isCash(e)).reduce((s,e)=>s+num(e.total),0);
+  const opening=ev.openingCash==null?0:num(ev.openingCash);
+  const expected=r2(opening+cs+cship+cpay);
+  const diff=ev.closingCash==null?null:r2(num(ev.closingCash)-expected);
+  const tabs=es.filter(e=>isCharge(e)).reduce((s,e)=>s+num(e.total),0);
+  return {sales,rev,cogs,cs,cship,cpay,opening,expected,diff,tabs,count:new Set(sales.map(e=>e.sale||e.id)).size,cashName};
+}
+function cashboxHtml(ev,x){
+  return `<div class="cashbox">
+    <span>Opening cash</span><span class="money">${ev.openingCash==null?'—':money(x.opening)}</span>
+    <span>+ Cash sales</span><span class="money">${money(x.cs)}</span>
+    ${x.cship?`<span>+ Cash shipping</span><span class="money">${money(x.cship)}</span>`:''}
+    ${x.cpay?`<span>+ Cash tab payments</span><span class="money">${money(x.cpay)}</span>`:''}
+    <span class="tot">Expected in cash box</span><span class="tot money">${money(x.expected)}</span>
+    ${ev.closingCash!=null?`<span>Counted</span><span class="money">${money(num(ev.closingCash))}</span>
+    <span class="tot">${x.diff===0?'Balanced':x.diff>0?'Over':'Short'}</span><span class="tot money ${x.diff<0?'neg':x.diff>0?'pos':''}">${x.diff===0?'✓':money(Math.abs(x.diff))}</span>`:''}
+  </div>${x.cashName?'':'<p class="muted" style="font-size:.85rem">Add a payment method named “Cash” to track the cash box.</p>'}`;
+}
 function renderReports(){
   fillMonths($('#rp-month'));
   const m=$('#rp-month').value;
-  const es=live().filter(e=>m==='all'||monthKey(new Date(e.ts))===m);
+  const es=live().filter(e=>inPeriod(e,m));
+  const selEv=m.indexOf('ev:')===0?S.events.find(e=>e.id===m.slice(3)):null;
+  if(selEv){
+    const x=eventSummary(selEv);
+    const dur=((selEv.endedAt||Date.now())-selEv.startedAt)/3600000;
+    $('#rp-event').innerHTML=`<div class="card" style="margin-top:1rem">
+      <div class="row" style="justify-content:space-between"><h3 style="margin:0">${selEv.endedAt?'':'<span class="dot" style="display:inline-block;width:.6rem;height:.6rem;border-radius:50%;background:var(--ok);margin-right:.4rem"></span>'}${esc(selEv.name)}</h3>${isAdmin()?`<button class="btn sm" data-evedit="${esc(selEv.id)}">${selEv.endedAt?'Edit':'Manage'}</button>`:''}</div>
+      <p class="muted" style="margin:.2rem 0 .6rem">${new Date(selEv.startedAt).toLocaleString()} → ${selEv.endedAt?new Date(selEv.endedAt).toLocaleString():'running'} · ${dur.toFixed(1)} h · started by ${esc(selEv.startedBy)}${selEv.notes?` · ${esc(selEv.notes)}`:''}</p>
+      <div class="grid2"><div><h3 style="font-size:1rem">Cash box</h3>${cashboxHtml(selEv,x)}</div>
+      <div><h3 style="font-size:1rem">At this event</h3><div class="cashbox"><span>Sales</span><span>${x.count}</span><span>Revenue</span><span class="money">${money(x.rev)}</span><span>Profit</span><span class="money">${money(x.rev-x.cogs)}</span><span>Charged to tabs</span><span class="money">${money(x.tabs)}</span><span>Event prices set</span><span>${Object.keys(selEv.prices||{}).length} items</span></div></div></div>
+    </div>`;
+  }else $('#rp-event').innerHTML='';
+  $('#rp-events').innerHTML=S.events.length?S.events.map(ev=>{const x=eventSummary(ev);return `<tr><td><button type="button" class="linkish" data-evsel="${esc(ev.id)}"><b>${esc(ev.name)}</b></button><div class="muted" style="font-size:.8rem">${ev.endedAt?'':'● running · '}${new Date(ev.startedAt).toLocaleDateString()}</div></td><td class="num">${x.count}</td><td class="num money">${money(x.rev)}</td><td class="num money">${money(x.rev-x.cogs)}</td><td class="num money ${x.diff<0?'neg':x.diff>0?'pos':''}">${x.diff==null?'—':x.diff===0?'✓':(x.diff>0?'+':'−')+money(Math.abs(x.diff))}</td></tr>`}).join('')
+    :'<tr><td colspan="5" class="empty">No events yet.</td></tr>';
   const sales=es.filter(e=>e.type==='sale');
   const rev=sales.reduce((s,e)=>s+num(e.total),0);
   const cogs=sales.reduce((s,e)=>s+(-num(e.qty))*num(e.cost),0);
@@ -1324,20 +1474,22 @@ function renderReports(){
   $('#rp-low').innerHTML=lows.length?lows.map(i=>`<tr><td>${esc(label(i))}</td><td class="num ${onHand(i.id)<=0?'neg':''}">${onHand(i.id)}</td><td class="num">${num(i.reorder)}</td></tr>`).join(''):'<tr><td colspan="3" class="empty">Nothing below reorder level.</td></tr>';
   const sh={loss:{u:0,v:0},comp:{u:0,v:0},adjust:{u:0,v:0}};
   for(const e of es)if(sh[e.type]){sh[e.type].u+=num(e.qty);sh[e.type].v+=num(e.qty)*num(e.cost)}
-  const pt={regular:{u:0,r:0,d:0},sale:{u:0,r:0,d:0},override:{u:0,r:0,d:0}};
+  const pt={regular:{u:0,r:0,d:0},sale:{u:0,r:0,d:0},event:{u:0,r:0,d:0},override:{u:0,r:0,d:0}};
   let disc=0;
   for(const e of sales){
     const k=pt[e.priceType]?e.priceType:'regular';const u=-num(e.qty);
     const d=num(e.listPrice)>num(e.unit)?(num(e.listPrice)-num(e.unit))*u:0;
     pt[k].u+=u;pt[k].r+=num(e.total);pt[k].d+=d;disc+=d;
   }
-  $('#rp-ptype').innerHTML=[['regular','Regular'],['sale','Sale'],['override','Changed at checkout']].map(([k,l])=>`<tr><td>${l}</td><td class="num">${pt[k].u}</td><td class="num money">${money(pt[k].r)}</td><td class="num money">${pt[k].d?money(pt[k].d):'—'}</td></tr>`).join('')+
+  $('#rp-ptype').innerHTML=[['regular','Regular'],['sale','Sale'],['event','Event price'],['override','Changed at checkout']].map(([k,l])=>`<tr><td>${l}</td><td class="num">${pt[k].u}</td><td class="num money">${money(pt[k].r)}</td><td class="num money">${pt[k].d?money(pt[k].d):'—'}</td></tr>`).join('')+
     `<tr><td><b>Total</b></td><td class="num"><b>${units}</b></td><td class="num money"><b>${money(rev)}</b></td><td class="num money"><b>${money(disc)}</b></td></tr>`;
   const outstanding=[...tabs().values()].reduce((s,t)=>s+Math.max(0,t.balance),0);
   $('#rp-stats').insertAdjacentHTML('beforeend',`<div class="card stat"><div class="v money">${money(disc)}</div><div class="l">Discounts given</div></div><div class="card stat"><div class="v money">${money(shipTot)}</div><div class="l">Shipping collected (not in revenue)</div></div><div class="card stat"><div class="v money ${outstanding>0?'neg':''}">${money(outstanding)}</div><div class="l">Tabs outstanding (all time)</div></div>`);
   $('#rp-shrink').innerHTML=Object.entries(sh).map(([k,x])=>`<tr><td>${TYPES[k]}</td><td class="num ${x.u<0?'neg':''}">${x.u}</td><td class="num money">${money(x.v)}</td></tr>`).join('');
 }
 $('#rp-month').addEventListener('input',renderReports);
+$('#rp-events').addEventListener('click',e=>{const b=e.target.closest('[data-evsel]');if(!b)return;wantPeriod='ev:'+b.dataset.evsel;renderReports();window.scrollTo({top:0,behavior:'smooth'})});
+$('#rp-event').addEventListener('click',e=>{const b=e.target.closest('[data-evedit]');if(!b)return;const ev=S.events.find(x=>x.id===b.dataset.evedit);if(ev)eventModal(ev)});
 $('#rp-top').addEventListener('click',e=>{const d=e.target.closest('[data-detail]');if(d)itemDetail(d.dataset.detail)});
 
 
@@ -1448,6 +1600,7 @@ $('#se-signout').onclick=()=>{if(S.cart.size&&!confirm('Sign out and clear your 
 $('#se-save-me').onclick=()=>{store('qm_who',$('#se-who').value.trim());store('qm_theme',$('#se-theme').value);applyTheme();showWho();toast('Saved on this device')};
 
 function refresh(){
+  renderEvBar();
   const c=S.settings.club||'Quartermaster',ch=S.settings.chapter||'';
   $('#title').innerHTML=`${esc(c)}${ch?' · '+esc(ch):''} <span>· Quartermaster</span>`;
   if(S.view==='sell')renderSell();
