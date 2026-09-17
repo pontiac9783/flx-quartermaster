@@ -15,6 +15,7 @@ Installable web app (PWA) for Android, iPhone/iPad and PC. Free to run.
 | **Shipping** | Optional per-item shipping rate. **Add shipping** in the cart (or **Add shipping to a past sale** / Ledger → **Ship** afterwards) suggests an editable amount and ship-to. Not allowed on Club Account (tab) sales. Recorded as a separate `shipping` ledger line with the same Sale ID, kept out of revenue/profit, included in takings. One shipping line per sale (void to change). |
 | **Cart holds** | Items in a cart are held for that device so two people can't sell the same last unit. Holds renew while the app is open and expire 10 minutes after it's closed; completing or clearing the sale releases them. |
 | **Tabs** | Club Account (member tab) charges, balances, partial/full payments, per-member history. |
+| **Events** | Admins start/end an event (e.g. a rally). While running, sales, shipping, tab charges and tab payments are tagged; optional event-only prices; opening/closing cash count with over/short. Reports can be filtered by event, with an events comparison table. |
 | **Item details** | Tap an item name (Stock, Reports → Top sellers): picture, price/cost/margin, on hand & held, days of stock left, sales this month / 30 days / all time, profit, 12-week trend, per-size breakdown, recent activity. |
 | **Stock** | Items with category, size/variant, auto SKU, price, cost, reorder level, picture, description. Receive, physical count, loss/damage, comp. |
 | **Sale pricing** | Per item or bulk (whole product / category). Regular price is kept; ending a sale restores it. |
@@ -160,9 +161,9 @@ Send them the app link and install steps. To remove access, remove them in **Set
 |---|---|---|---|---|---|---|---|---|---|
 | EntryID | Timestamp | Type | SaleID | ItemID | ItemName | Category | Qty | Unit | Total |
 
-| K | L | M | N | O | P | Q | R | S | T |
-|---|---|---|---|---|---|---|---|---|---|
-| UnitCost | Payment | RecordedBy | Party | Note | VoidsEntry | Voided | ListPrice | PriceType | OnTab |
+| K | L | M | N | O | P | Q | R | S | T | U |
+|---|---|---|---|---|---|---|---|---|---|---|
+| UnitCost | Payment | RecordedBy | Party | Note | VoidsEntry | Voided | ListPrice | PriceType | OnTab | EventID |
 
 Types: `sale`, `shipping`, `receive`, `adjust`, `loss`, `comp`, `payment` (tab payment), `void`.
 Stock on hand = sum of `Qty` for non-voided entries.
@@ -178,6 +179,8 @@ Stock on hand = sum of `Qty` for non-voided entries.
 | `C4↓` | Payment methods that require a member name (tabs) |
 | `D4↓` | Allowed Google emails |
 | `E4↓` | Role (`admin` / `user`) |
+
+**Events** — `EventID`, `Name`, `StartedAt`, `EndedAt`, `StartedBy`, `EndedBy`, `OpeningCash`, `ClosingCash`, `Notes`, `PricesJSON` (event price per item ID). Only one event can run at a time. Price precedence: event price → sale price → regular.
 
 **Images** — one row per picture (`ImageID`, base64 thumbnail ≤ ~45 KB, created, uploaded by).
 
