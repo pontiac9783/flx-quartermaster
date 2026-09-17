@@ -234,7 +234,12 @@ header{padding-top:max(.6rem,env(safe-area-inset-top));padding-left:max(1rem,env
 body.role-user .admin-only{display:none!important}
 .rolechip{display:inline-block;margin-left:.4rem;padding:0 .4rem;border-radius:4px;font-size:.72rem;font-weight:700;letter-spacing:.04em;background:var(--brass);color:#fff;vertical-align:middle}
 #inapp{display:none}#inapp.on{display:block}
-.userrow select{width:auto;min-height:36px;padding:.2rem .4rem}
+.ulist{display:flex;flex-direction:column;gap:.45rem}
+.urow{border:1px solid var(--line);border-radius:10px;padding:.55rem .65rem;background:var(--surface)}
+.urow .em{font-weight:600;word-break:break-all}
+.urow .ctl{display:flex;gap:.45rem;flex-wrap:wrap;align-items:center;margin-top:.4rem}
+.urow select{width:auto;min-height:40px;padding:.2rem .5rem;flex:1 1 8rem}
+.urow .btn{flex:0 0 auto}
 #toast{position:fixed;left:50%;bottom:4.5rem;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:.6rem 1rem;border-radius:8px;display:none;z-index:30;max-width:90vw}
 #banner{display:none;background:var(--warn);color:#fff;padding:.6rem 1rem;text-align:center}
 .empty{padding:2rem;text-align:center;color:var(--muted)}
@@ -429,7 +434,7 @@ body.role-user .admin-only{display:none!important}
       <div class="card admin-only">
         <h3>Users</h3>
         <p class="muted" style="margin-top:0">Admins manage stock, pricing, ledger, reports and settings. Users can sell, view stock and handle tabs.</p>
-        <div class="tw"><table><thead><tr><th>Google email</th><th>Member</th><th>Role</th><th class="act"></th></tr></thead><tbody id="se-users"></tbody></table></div>
+        <div id="se-users" class="ulist"></div>
         <div class="row" style="margin-top:.6rem"><input id="se-newuser" class="grow" type="email" placeholder="member@gmail.com" autocomplete="off"><select id="se-newrole" style="width:auto"><option value="user">User</option><option value="bar">Bar tablet</option><option value="admin">Admin</option></select><button class="btn" id="se-adduser">Add</button></div>
         <p class="muted" style="font-size:.85rem">New people must also be added in Google Cloud → Audience → Test users before they can sign in.</p>
       </div>
@@ -2393,14 +2398,17 @@ function renderUsers(){
   const roster=S.settings.members||[];
   const ownerRow=S.users.find(u=>u.email===S.owner)||{};
   const rows=[{email:S.owner,role:'admin',owner:true,member:ownerRow.member||''},...S.users.filter(u=>u.email!==S.owner)];
-  $('#se-users').innerHTML=rows.filter(u=>u.email).map(u=>`<tr class="userrow" data-e="${esc(u.email)}"><td>${esc(u.email)}${u.email===me?' <span class="muted">(you)</span>':''}</td>
-    <td>${roster.length?`<select data-member><option value="">— not linked —</option>${roster.map(n=>`<option ${catKey(n)===catKey(u.member||'')?'selected':''}>${esc(n)}</option>`).join('')}</select>`:''}</td>
-    <td>${u.owner?'<b>Owner</b>':`<select data-role><option value="user" ${u.role!=='admin'&&u.role!=='bar'?'selected':''}>User</option><option value="bar" ${u.role==='bar'?'selected':''}>Bar tablet</option><option value="admin" ${u.role==='admin'?'selected':''}>Admin</option></select>`}</td>
-    <td class="act">${u.owner?'':'<button class="btn sm" data-rm>Remove</button>'}</td></tr>`).join('');
+  $('#se-users').innerHTML=rows.filter(u=>u.email).map(u=>`<div class="urow" data-e="${esc(u.email)}">
+    <div class="em">${esc(u.email)}${u.email===me?' <span class="muted" style="font-weight:400">(you)</span>':''}${u.owner?' <span class="tag">owner</span>':''}</div>
+    <div class="ctl">
+      ${roster.length?`<select data-member aria-label="Member"><option value="">— not linked —</option>${roster.map(n=>`<option ${catKey(n)===catKey(u.member||'')?'selected':''}>${esc(n)}</option>`).join('')}</select>`:''}
+      ${u.owner?'<span class="muted">Admin (owner)</span>':`<select data-role aria-label="Role"><option value="user" ${u.role!=='admin'&&u.role!=='bar'?'selected':''}>User</option><option value="bar" ${u.role==='bar'?'selected':''}>Bar tablet</option><option value="admin" ${u.role==='admin'?'selected':''}>Admin</option></select>`}
+      ${u.owner?'':'<button class="btn sm" data-rm>Remove</button>'}
+    </div></div>`).join('');
 }
 function saveUsers(list,msg){return write('saveUsers',{users:list},msg)}
 $('#se-users').addEventListener('change',e=>{
-  const tr=e.target.closest('tr');if(!tr)return;
+  const tr=e.target.closest('.urow');if(!tr)return;
   const em=tr.dataset.e;
   const has=S.users.some(u=>u.email===em);
   const base=has?S.users:[...S.users,{email:em,role:em===S.owner?'admin':'user',member:''}];
@@ -2414,7 +2422,7 @@ $('#se-users').addEventListener('change',e=>{
 });
 $('#se-users').addEventListener('click',e=>{
   if(!e.target.closest('[data-rm]'))return;
-  const em=e.target.closest('tr').dataset.e;
+  const em=e.target.closest('.urow').dataset.e;
   if(!confirm(`Remove ${em}? They will lose access immediately.`))return;
   saveUsers(S.users.filter(u=>u.email!==em),'User removed');
 });
