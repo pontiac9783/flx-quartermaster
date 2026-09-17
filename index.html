@@ -1013,14 +1013,41 @@ function payModal(t){
   });
 }
 function histModal(t){
+  const asc=t.rows.slice().sort((a,b)=>a.ts-b.ts);
+  const days=new Map();
   let run=0;
-  const rows=t.rows.map(e=>{const charge=e.type==='sale'||e.type==='shipping';run=r2(run+(charge?num(e.total):-num(e.total)));
-    return `<tr><td>${new Date(e.ts).toLocaleDateString()}</td><td>${charge?(e.type==='shipping'?'Shipping':esc(e.itemName)+(num(e.qty)!==-1?` × ${-num(e.qty)}`:'')):`<span class="tag t-payment">Payment · ${esc(e.pay)}</span>`}${e.note?`<div class="muted" style="font-size:.85rem">${esc(e.note)}</div>`:''}</td>
-    <td class="num money">${charge?money(num(e.total)):''}</td><td class="num money pos">${charge?'':money(num(e.total))}</td><td class="num money"><b>${money(run)}</b></td></tr>`}).reverse().join('');
+  for(const e of asc){
+    const charge=e.type==='sale'||e.type==='shipping';
+    run=r2(run+(charge?num(e.total):-num(e.total)));
+    const d=new Date(e.ts),k=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    const g=days.get(k)||{key:k,ts:e.ts,bar:[],merch:[],pays:[],barAmt:0,merchAmt:0,paidAmt:0,run:0};
+    if(!charge)  {g.pays.push(e);g.paidAmt+=num(e.total)}
+    else if(e.section==='bar'){g.bar.push(e);g.barAmt+=num(e.total)}
+    else {g.merch.push(e);g.merchAmt+=num(e.total)}
+    g.ts=Math.max(g.ts,e.ts);g.run=run;
+    days.set(k,g);
+  }
+  const list=[...days.values()].sort((a,b)=>b.ts-a.ts);
+  const line=(txt,sub,amt,cls)=>`<tr><td class="wrap">${txt}${sub?`<div class="muted" style="font-size:.8rem">${sub}</div>`:''}</td><td class="num money ${cls||''}">${amt}</td></tr>`;
+  const dayHtml=g=>{
+    const charged=r2(g.barAmt+g.merchAmt);
+    const barRows=g.bar.length?`<details${g.bar.length>3?'':' open'}><summary style="cursor:pointer;padding:.35rem 0"><b>🍻 Bar</b> · ${g.bar.length} drink${g.bar.length===1?'':'s'} — ${money(g.barAmt)}</summary>
+      <div class="tw" style="margin:.3rem 0 .5rem"><table><tbody>${g.bar.map(e=>line(esc(e.itemName),new Date(e.ts).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'}),money(num(e.total)))).join('')}</tbody></table></div></details>`:'';
+    const merchRows=g.merch.map(e=>line(e.type==='shipping'?'Shipping':esc(e.itemName)+(num(e.qty)!==-1?` × ${-num(e.qty)}`:''),new Date(e.ts).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'}),money(num(e.total)))).join('');
+    const payRows=g.pays.map(e=>line(`<span class="tag t-payment">Payment · ${esc(e.pay)}</span>`,esc(e.note||''),'−'+money(num(e.total)),'pos')).join('');
+    return `<div class="card" style="margin-bottom:.6rem;padding:.7rem">
+      <div class="row" style="justify-content:space-between;align-items:baseline">
+        <b>${new Date(g.ts).toLocaleDateString([], {weekday:'short',month:'short',day:'numeric'})}</b>
+        <span class="muted">${charged?`charged ${money(charged)}`:''}${g.paidAmt?`${charged?' · ':''}paid ${money(g.paidAmt)}`:''} · balance <b class="${g.run>0.004?'neg':''}">${money(g.run)}</b></span>
+      </div>
+      ${barRows}
+      ${(merchRows||payRows)?`<div class="tw" style="margin-top:.3rem"><table><tbody>${merchRows}${payRows}</tbody></table></div>`:''}
+    </div>`;
+  };
   openModal(`<h3>${esc(t.name)} — tab history</h3>
     <p style="margin-top:0">Charged ${money(t.charged)} · Paid ${money(t.paid)} · <b class="${t.balance>0.004?'neg':''}">Balance ${money(t.balance)}</b></p>
-    <div class="tw" style="max-height:55vh;overflow:auto"><table><thead><tr><th>Date</th><th>Item / payment</th><th class="num">Charge</th><th class="num">Paid</th><th class="num">Balance</th></tr></thead><tbody>${rows}</tbody></table></div>
-    <p class="muted" style="font-size:.85rem">Newest first. Voided entries are not shown — see the Ledger.</p>
+    <div style="max-height:58vh;overflow:auto;padding-right:.2rem">${list.length?list.map(dayHtml).join(''):'<p class="muted">No charges yet.</p>'}</div>
+    <p class="muted" style="font-size:.85rem">Newest day first · tap a bar day to see each drink. Voided entries are not shown.</p>
     <div class="row" style="margin-top:.6rem;justify-content:flex-end">${t.balance>0.004?'<button class="btn pri" data-pay>Record payment</button>':''}<button class="btn" data-x>Close</button></div>`,md=>{
     md.querySelector('[data-x]').onclick=closeModal;
     const p=md.querySelector('[data-pay]');if(p)p.onclick=()=>{closeModal();payModal(t)};
