@@ -21,6 +21,7 @@ Installable web app (PWA) for Android, iPhone/iPad and PC. Free to run.
 | **Bar** | Tablet-first Bar screen: tap drinks to build a round, then tap **Cash** or a member's name to charge it — one write per round. Member/guest pricing, comps with reason, quick items, per-drink ✕ before charging and **↺ undo** of the last round. Bar shifts have their own cash box (open/close count, over/short) and can be counted toward a running event. **📋 Tonight** shows cash taken, running tabs by member, expected in the bar box, drinks poured and the shift's bar ledger (entries removable). |
 | **Receiving** | One **📦 Receive** screen: tap-to-add list (low stock first) or type-and-Enter search, qty steppers, **pack size** (30-pack for $25 → $0.83 a can) and cost per line, a supplier note, and **Paid by**: treasurer (cost only), cash drawer (bar box or merch — logged as a cost out of that till), or personal (reimbursement list). Saved as one batch; spirits entered in bottles. |
 | **Spirits** | Bottle size + pour size → pours per bottle. Stock is held in pours; receive in bottles, count as bottles + quarters. Mixed drinks deduct pours from their liquor. |
+| **Calendar** | Month grid showing bar nights from the schedule plus anything the club adds — meetings, rides, events, birthdays. Tap a day to see or add items; admins can set that Friday's bartender from the day view. Stored in the **Calendar** tab. |
 | **Bar schedule** | Friday roster in the **Schedule** tab (`Date`, `Member`, `Note`). Settings → Bar schedule: edit who's on, **+ Add Friday**, **Fill 12 weeks (rotate)** continues the rotation from the last assigned name. The Bar screen shows tonight's or the next bar night, and **Open bar** pre-fills the scheduled name. |
 | **Reset data** | Settings → Danger zone. Owner-only, pick what to clear (ledger / shifts / events / pictures / items), type `RESET DATA`, then two confirmations. Settings, categories, members, users and roles are never touched. |
 | **Item details** | Tap an item name (Stock, Reports → Top sellers): picture, price/cost/margin, on hand & held, days of stock left, sales this month / 30 days / all time, profit, 12-week trend, per-size breakdown, recent activity. |
@@ -197,6 +198,8 @@ Stock on hand = sum of `Qty` for non-voided entries.
 | `H4↓` | Member name linked to each login (same row as the email in `D`) |
 
 **Events** — `EventID`, `Name`, `StartedAt`, `EndedAt`, `StartedBy`, `EndedBy`, `OpeningCash`, `ClosingCash`, `Notes`, `PricesJSON` (event price per item ID), `RiderFee`, `PassengerFee`. Only one event can run at a time. Price precedence: event price → sale price → regular.
+
+**Calendar** — `ID`, `Date`, `Title`, `Kind` (meeting/ride/event/birthday/other), `Time`, `Note`, `AddedBy`. Anyone signed in can add; the person who added it or an admin can edit or remove.
 
 **Schedule** — `Date` (yyyy-mm-dd), `Member`, `Note`. Seeded with the Friday rotation on first `setup()`.
 
