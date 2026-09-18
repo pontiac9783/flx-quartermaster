@@ -21,6 +21,7 @@ Installable web app (PWA) for Android, iPhone/iPad and PC. Free to run.
 | **Bar** | Tablet-first Bar screen: tap drinks to build a round, then tap **Cash** or a member's name to charge it — one write per round. Member/guest pricing, comps with reason, quick items, per-drink ✕ before charging and **↺ undo** of the last round. Bar shifts have their own cash box (open/close count, over/short) and can be counted toward a running event. **📋 Tonight** shows cash taken, running tabs by member, expected in the bar box, drinks poured and the shift's bar ledger (entries removable). |
 | **Receiving** | One **📦 Receive** screen: tap-to-add list (low stock first) or type-and-Enter search, qty steppers, **pack size** (30-pack for $25 → $0.83 a can) and cost per line, a supplier note, and **Paid by**: treasurer (cost only), cash drawer (bar box or merch — logged as a cost out of that till), or personal (reimbursement list). Saved as one batch; spirits entered in bottles. |
 | **Spirits** | Bottle size + pour size → pours per bottle. Stock is held in pours; receive in bottles, count as bottles + quarters. Mixed drinks deduct pours from their liquor. |
+| **Bar schedule** | Friday roster in the **Schedule** tab (`Date`, `Member`, `Note`). Settings → Bar schedule: edit who's on, **+ Add Friday**, **Fill 12 weeks (rotate)** continues the rotation from the last assigned name. The Bar screen shows tonight's or the next bar night, and **Open bar** pre-fills the scheduled name. |
 | **Reset data** | Settings → Danger zone. Owner-only, pick what to clear (ledger / shifts / events / pictures / items), type `RESET DATA`, then two confirmations. Settings, categories, members, users and roles are never touched. |
 | **Item details** | Tap an item name (Stock, Reports → Top sellers): picture, price/cost/margin, on hand & held, days of stock left, sales this month / 30 days / all time, profit, 12-week trend, per-size breakdown, recent activity. |
 | **Stock** | Items with category, size/variant, auto SKU, price, cost, reorder level, picture, description. Receive, physical count, loss/damage, comp. |
@@ -196,6 +197,8 @@ Stock on hand = sum of `Qty` for non-voided entries.
 | `H4↓` | Member name linked to each login (same row as the email in `D`) |
 
 **Events** — `EventID`, `Name`, `StartedAt`, `EndedAt`, `StartedBy`, `EndedBy`, `OpeningCash`, `ClosingCash`, `Notes`, `PricesJSON` (event price per item ID), `RiderFee`, `PassengerFee`. Only one event can run at a time. Price precedence: event price → sale price → regular.
+
+**Schedule** — `Date` (yyyy-mm-dd), `Member`, `Note`. Seeded with the Friday rotation on first `setup()`.
 
 **Shifts** — `ShiftID`, `OpenedAt`, `ClosedAt`, `Bartender`, `OpenedBy`, `ClosedBy`, `OpeningCash`, `ClosingCash`, `EventID`, `Notes`. One shift open at a time; the bar cash box is separate from merch and event cash.
 
